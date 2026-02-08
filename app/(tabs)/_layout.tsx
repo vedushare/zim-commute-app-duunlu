@@ -1,37 +1,80 @@
-import React from 'react';
-import { Stack } from 'expo-router';
-import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+
+import { Tabs, Redirect } from 'expo-router';
+import React, { useEffect } from 'react';
+import FloatingTabBar from '@/components/FloatingTabBar';
+import { colors } from '@/styles/commonStyles';
+import { useAuth } from '@/contexts/AuthContext';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
-  // Define the tabs configuration
-  const tabs: TabBarItem[] = [
+  const { isLoading, isAuthenticated, user } = useAuth();
+
+  console.log('TabLayout: Auth state -', { isLoading, isAuthenticated, hasUser: !!user });
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    console.log('TabLayout: Not authenticated, redirecting to login');
+    return <Redirect href="/auth/phone-login" />;
+  }
+
+  // Redirect to profile setup if user hasn't completed profile
+  if (user && !user.fullName) {
+    console.log('TabLayout: Profile incomplete, redirecting to setup');
+    return <Redirect href="/auth/profile-setup" />;
+  }
+
+  const tabs = [
     {
       name: '(home)',
-      route: '/(tabs)/(home)/',
-      icon: 'home',
-      label: 'Home',
+      title: 'Home',
+      iosIconName: 'house.fill',
+      androidIconName: 'home' as const,
     },
     {
       name: 'profile',
-      route: '/(tabs)/profile',
-      icon: 'person',
-      label: 'Profile',
+      title: 'Profile',
+      iosIconName: 'person.fill',
+      androidIconName: 'person' as const,
     },
   ];
 
-  // For Android and Web, use Stack navigation with custom floating tab bar
   return (
-    <>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none', // Remove fade animation to prevent black screen flash
+    <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} tabs={tabs} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen
+        name="(home)"
+        options={{
+          title: 'Home',
         }}
-      >
-        <Stack.Screen key="home" name="(home)" />
-        <Stack.Screen key="profile" name="profile" />
-      </Stack>
-      <FloatingTabBar tabs={tabs} />
-    </>
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+        }}
+      />
+    </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+});

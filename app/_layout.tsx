@@ -1,32 +1,95 @@
+
 import "react-native-reanimated";
-import React, { useEffect } from "react";
-import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { WidgetProvider } from "@/contexts/WidgetContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import * as SplashScreen from "expo-splash-screen";
-import { SystemBars } from "react-native-edge-to-edge";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
-import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
   DefaultTheme,
-  Theme,
   ThemeProvider,
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { WidgetProvider } from "@/contexts/WidgetContext";
-// Note: Error logging is auto-initialized via index.ts import
+import React, { useEffect } from "react";
+import { SystemBars } from "react-native-edge-to-edge";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { useFonts } from "expo-font";
+import { useColorScheme, View, ActivityIndicator } from "react-native";
+import { useNetworkState } from "expo-network";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { colors } from "@/styles/commonStyles";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-export const unstable_settings = {
-  initialRouteName: "(tabs)", // Ensure any route can link back to `/`
-};
+/**
+ * Auth-aware navigation component
+ * Implements the "AUTH BOOTSTRAP" rule to prevent redirect loops
+ */
+function RootLayoutNav() {
+  const { isLoading, isAuthenticated, user } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    if (isLoading) {
+      // Still loading auth state, don't navigate yet
+      return;
+    }
+
+    const inAuthGroup = segments[0] === 'auth';
+    const inTabsGroup = segments[0] === '(tabs)';
+
+    console.log('[RootLayout] Auth state:', { isAuthenticated, isLoading, segments });
+
+    if (!isAuthenticated && !inAuthGroup) {
+      // User is not authenticated and not in auth screens, redirect to login
+      console.log('[RootLayout] Redirecting to phone-login');
+      router.replace('/auth/phone-login');
+    } else if (isAuthenticated && inAuthGroup) {
+      // User is authenticated but still in auth screens
+      // Check if profile is complete
+      const isProfileComplete = user?.fullName && user?.userType && user?.homeCity;
+      
+      if (!isProfileComplete && segments[1] !== 'profile-setup') {
+        // Profile incomplete, redirect to profile setup
+        console.log('[RootLayout] Redirecting to profile-setup');
+        router.replace('/auth/profile-setup');
+      } else if (isProfileComplete) {
+        // Profile complete, redirect to home
+        console.log('[RootLayout] Redirecting to home');
+        router.replace('/(tabs)/(home)');
+      }
+    }
+  }, [isLoading, isAuthenticated, segments, user]);
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <SystemBars style={colorScheme === "dark" ? "light" : "dark"} />
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/phone-login" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/verify-otp" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/profile-setup" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+    </ThemeProvider>
+  );
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const networkState = useNetworkState();
+  const { isConnected } = useNetworkState();
+
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -37,62 +100,17 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  React.useEffect(() => {
-    if (
-      !networkState.isConnected &&
-      networkState.isInternetReachable === false
-    ) {
-      Alert.alert(
-        "🔌 You are offline",
-        "You can keep using the app! Your changes will be saved locally and synced when you are back online."
-      );
-    }
-  }, [networkState.isConnected, networkState.isInternetReachable]);
-
   if (!loaded) {
     return null;
   }
 
-  const CustomDefaultTheme: Theme = {
-    ...DefaultTheme,
-    dark: false,
-    colors: {
-      primary: "rgb(0, 122, 255)", // System Blue
-      background: "rgb(242, 242, 247)", // Light mode background
-      card: "rgb(255, 255, 255)", // White cards/surfaces
-      text: "rgb(0, 0, 0)", // Black text for light mode
-      border: "rgb(216, 216, 220)", // Light gray for separators/borders
-      notification: "rgb(255, 59, 48)", // System Red
-    },
-  };
-
-  const CustomDarkTheme: Theme = {
-    ...DarkTheme,
-    colors: {
-      primary: "rgb(10, 132, 255)", // System Blue (Dark Mode)
-      background: "rgb(1, 1, 1)", // True black background for OLED displays
-      card: "rgb(28, 28, 30)", // Dark card/surface color
-      text: "rgb(255, 255, 255)", // White text for dark mode
-      border: "rgb(44, 44, 46)", // Dark gray for separators/borders
-      notification: "rgb(255, 69, 58)", // System Red (Dark Mode)
-    },
-  };
   return (
-    <>
-      <StatusBar style="auto" animated />
-        <ThemeProvider
-          value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
-        >
-          <WidgetProvider>
-            <GestureHandlerRootView>
-            <Stack>
-              {/* Main app with tabs */}
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-            <SystemBars style={"auto"} />
-            </GestureHandlerRootView>
-          </WidgetProvider>
-        </ThemeProvider>
-    </>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <WidgetProvider>
+          <RootLayoutNav />
+        </WidgetProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
