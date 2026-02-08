@@ -1,201 +1,331 @@
 
-import React, { useState } from "react";
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, TextInput } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol } from "@/components/IconSymbol";
-import { colors } from "@/styles/commonStyles";
-
-interface Ride {
-  id: string;
-  from: string;
-  to: string;
-  date: string;
-  time: string;
-  price: string;
-  driver: string;
-  seats: number;
-}
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import { ZIMBABWE_CITIES } from '@/constants/zimbabwe';
+import { searchRides } from '@/utils/ridesApi';
+import { Ride } from '@/types/rides';
+import { VerificationBadge } from '@/components/auth/VerificationBadge';
+import Button from '@/components/button';
 
 export default function HomeScreen() {
-  console.log('HomeScreen (iOS): Rendering ZimCommute home screen');
+  const router = useRouter();
   
-  const [searchFrom, setSearchFrom] = useState('');
-  const [searchTo, setSearchTo] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showOriginDropdown, setShowOriginDropdown] = useState(false);
+  const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+  const [ladiesOnly, setLadiesOnly] = useState(false);
+  const [verifiedDriversOnly, setVerifiedDriversOnly] = useState(false);
+  
+  const [rides, setRides] = useState<Ride[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  // Mock data for available rides
-  const mockRides: Ride[] = [
-    {
-      id: '1',
-      from: 'Harare',
-      to: 'Bulawayo',
-      date: '2024-01-20',
-      time: '08:00',
-      price: 'USD $25',
-      driver: 'Tendai M.',
-      seats: 3,
-    },
-    {
-      id: '2',
-      from: 'Harare',
-      to: 'Mutare',
-      date: '2024-01-20',
-      time: '09:30',
-      price: 'USD $15',
-      driver: 'Chipo K.',
-      seats: 2,
-    },
-    {
-      id: '3',
-      from: 'Bulawayo',
-      to: 'Victoria Falls',
-      date: '2024-01-21',
-      time: '07:00',
-      price: 'USD $20',
-      driver: 'Tafadzwa N.',
-      seats: 4,
-    },
-  ];
+  const handleSearch = async () => {
+    if (!origin || !destination) {
+      return;
+    }
 
-  const handleSearch = () => {
-    console.log('User tapped Search button', { from: searchFrom, to: searchTo });
-    // TODO: Backend Integration - GET /api/rides with query params { from, to, date }
+    try {
+      setLoading(true);
+      console.log('Searching rides:', origin, destination, date.toISOString().split('T')[0]);
+      
+      const results = await searchRides({
+        origin,
+        destination,
+        date: date.toISOString().split('T')[0],
+        minPrice,
+        maxPrice,
+        ladiesOnly: ladiesOnly || undefined,
+        verifiedDriversOnly: verifiedDriversOnly || undefined,
+      });
+
+      setRides(results);
+      setHasSearched(true);
+    } catch (error: any) {
+      console.error('Failed to search rides:', error);
+      setRides([]);
+      setHasSearched(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleBookRide = (rideId: string) => {
-    console.log('User tapped Book button for ride:', rideId);
-    // TODO: Backend Integration - POST /api/bookings with { rideId, userId }
+  const handleRidePress = (rideId: string) => {
+    console.log('User tapped ride:', rideId);
+    router.push(`/rides/${rideId}`);
   };
+
+  const formatTime = (dateString: string) => {
+    const d = new Date(dateString);
+    const hours = d.getHours().toString().padStart(2, '0');
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    const day = d.getDate();
+    const month = d.toLocaleString('default', { month: 'short' });
+    return `${day} ${month}`;
+  };
+
+  const selectedDateText = date.toLocaleDateString();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>ZimCommute</Text>
-          <Text style={styles.tagline}>Share rides, save money</Text>
+          <Text style={styles.title}>Find a Ride</Text>
+          <Text style={styles.subtitle}>Search for available rides in Zimbabwe</Text>
         </View>
 
-        {/* Search Section */}
         <View style={styles.searchCard}>
-          <Text style={styles.searchTitle}>Find a ride</Text>
-          
-          <View style={styles.inputContainer}>
-            <IconSymbol 
-              ios_icon_name="location.circle.fill" 
-              android_material_icon_name="location-on" 
-              size={24} 
-              color={colors.primary} 
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="From (e.g., Harare)"
-              placeholderTextColor={colors.textSecondary}
-              value={searchFrom}
-              onChangeText={setSearchFrom}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <IconSymbol 
-              ios_icon_name="location.circle" 
-              android_material_icon_name="place" 
-              size={24} 
-              color={colors.accent} 
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="To (e.g., Bulawayo)"
-              placeholderTextColor={colors.textSecondary}
-              value={searchTo}
-              onChangeText={setSearchTo}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <IconSymbol 
-              ios_icon_name="magnifyingglass" 
-              android_material_icon_name="search" 
-              size={20} 
-              color="#FFFFFF" 
-            />
-            <Text style={styles.searchButtonText}>Search Rides</Text>
+          <Text style={styles.label}>From</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setShowOriginDropdown(!showOriginDropdown)}
+          >
+            <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={20} color={colors.primary} />
+            <Text style={[styles.dropdownText, !origin && styles.placeholderText]}>
+              {origin || 'Select origin'}
+            </Text>
+            <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="arrow-drop-down" size={24} color={colors.text} />
           </TouchableOpacity>
-        </View>
-
-        {/* Available Rides */}
-        <View style={styles.ridesSection}>
-          <Text style={styles.sectionTitle}>Available Rides</Text>
-          
-          {mockRides.map((ride) => {
-            const fromCity = ride.from;
-            const toCity = ride.to;
-            const dateDisplay = ride.date;
-            const timeDisplay = ride.time;
-            const priceDisplay = ride.price;
-            const driverName = ride.driver;
-            const seatsAvailable = ride.seats;
-            
-            return (
-              <View key={ride.id} style={styles.rideCard}>
-                <View style={styles.rideHeader}>
-                  <View style={styles.routeContainer}>
-                    <Text style={styles.cityText}>{fromCity}</Text>
-                    <IconSymbol 
-                      ios_icon_name="arrow.right" 
-                      android_material_icon_name="arrow-forward" 
-                      size={20} 
-                      color={colors.textSecondary} 
-                    />
-                    <Text style={styles.cityText}>{toCity}</Text>
-                  </View>
-                  <Text style={styles.priceText}>{priceDisplay}</Text>
-                </View>
-
-                <View style={styles.rideDetails}>
-                  <View style={styles.detailRow}>
-                    <IconSymbol 
-                      ios_icon_name="calendar" 
-                      android_material_icon_name="calendar-today" 
-                      size={16} 
-                      color={colors.textSecondary} 
-                    />
-                    <Text style={styles.detailText}>{dateDisplay}</Text>
-                    <Text style={styles.detailText}> at </Text>
-                    <Text style={styles.detailText}>{timeDisplay}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <IconSymbol 
-                      ios_icon_name="person.circle" 
-                      android_material_icon_name="person" 
-                      size={16} 
-                      color={colors.textSecondary} 
-                    />
-                    <Text style={styles.detailText}>{driverName}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <IconSymbol 
-                      ios_icon_name="person.2" 
-                      android_material_icon_name="group" 
-                      size={16} 
-                      color={colors.textSecondary} 
-                    />
-                    <Text style={styles.detailText}>{seatsAvailable}</Text>
-                    <Text style={styles.detailText}> seats available</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity 
-                  style={styles.bookButton}
-                  onPress={() => handleBookRide(ride.id)}
+          {showOriginDropdown && (
+            <View style={styles.dropdownList}>
+              {ZIMBABWE_CITIES.map((city) => (
+                <TouchableOpacity
+                  key={city}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setOrigin(city);
+                    setShowOriginDropdown(false);
+                  }}
                 >
-                  <Text style={styles.bookButtonText}>Book Ride</Text>
+                  <Text style={styles.dropdownItemText}>{city}</Text>
                 </TouchableOpacity>
-              </View>
-            );
-          })}
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.label}>To</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setShowDestinationDropdown(!showDestinationDropdown)}
+          >
+            <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={20} color={colors.primary} />
+            <Text style={[styles.dropdownText, !destination && styles.placeholderText]}>
+              {destination || 'Select destination'}
+            </Text>
+            <IconSymbol ios_icon_name="chevron.down" android_material_icon_name="arrow-drop-down" size={24} color={colors.text} />
+          </TouchableOpacity>
+          {showDestinationDropdown && (
+            <View style={styles.dropdownList}>
+              {ZIMBABWE_CITIES.map((city) => (
+                <TouchableOpacity
+                  key={city}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setDestination(city);
+                    setShowDestinationDropdown(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{city}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.label}>Date</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={20} color={colors.primary} />
+            <Text style={styles.dropdownText}>{selectedDateText}</Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={(event, selectedDate) => {
+                setShowDatePicker(false);
+                if (selectedDate) setDate(selectedDate);
+              }}
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowFilters(!showFilters)}
+          >
+            <IconSymbol ios_icon_name="slider.horizontal.3" android_material_icon_name="tune" size={20} color={colors.primary} />
+            <Text style={styles.filterButtonText}>Filters</Text>
+          </TouchableOpacity>
+
+          {showFilters && (
+            <View style={styles.filtersContainer}>
+              <TouchableOpacity
+                style={styles.filterOption}
+                onPress={() => setLadiesOnly(!ladiesOnly)}
+              >
+                <Text style={styles.filterOptionText}>Ladies Only</Text>
+                <View style={[styles.checkbox, ladiesOnly && styles.checkboxActive]}>
+                  {ladiesOnly && <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color="#fff" />}
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.filterOption}
+                onPress={() => setVerifiedDriversOnly(!verifiedDriversOnly)}
+              >
+                <Text style={styles.filterOptionText}>Verified Drivers Only</Text>
+                <View style={[styles.checkbox, verifiedDriversOnly && styles.checkboxActive]}>
+                  {verifiedDriversOnly && <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color="#fff" />}
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Button
+            title={loading ? 'Searching...' : 'Search Rides'}
+            onPress={handleSearch}
+            disabled={loading || !origin || !destination}
+          />
         </View>
+
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Searching for rides...</Text>
+          </View>
+        )}
+
+        {!loading && hasSearched && rides.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <IconSymbol ios_icon_name="car.fill" android_material_icon_name="directions-car" size={64} color={colors.textSecondary} />
+            <Text style={styles.emptyTitle}>No Rides Found</Text>
+            <Text style={styles.emptyText}>Try adjusting your search criteria</Text>
+          </View>
+        )}
+
+        {!loading && rides.length > 0 && (
+          <View style={styles.resultsContainer}>
+            <Text style={styles.resultsTitle}>
+              {rides.length}
+            </Text>
+            <Text style={styles.resultsSubtitle}>available rides</Text>
+            
+            {rides.map((ride) => {
+              const departureTimeText = formatTime(ride.departureTime);
+              const departureDateText = formatDate(ride.departureTime);
+              const arrivalTimeText = formatTime(ride.arrivalTime);
+              const priceText = `$${ride.pricePerSeat.toFixed(2)}`;
+              const seatsText = `${ride.availableSeats} seats`;
+              const vehicleText = `${ride.vehicle?.make} ${ride.vehicle?.model}`;
+              const driverName = ride.driver?.fullName || 'Unknown';
+              
+              return (
+                <TouchableOpacity
+                  key={ride.id}
+                  style={styles.rideCard}
+                  onPress={() => handleRidePress(ride.id)}
+                >
+                  <View style={styles.rideHeader}>
+                    <View style={styles.driverInfo}>
+                      <View style={styles.driverAvatar}>
+                        <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={24} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.driverName}>{driverName}</Text>
+                        <VerificationBadge level={ride.driver?.verificationLevel || 'PhoneVerified'} size="small" />
+                      </View>
+                    </View>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.price}>{priceText}</Text>
+                      <Text style={styles.priceLabel}>per seat</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.routeContainer}>
+                    <View style={styles.routePoint}>
+                      <IconSymbol ios_icon_name="circle.fill" android_material_icon_name="circle" size={12} color={colors.primary} />
+                      <Text style={styles.routeCity}>{ride.origin}</Text>
+                    </View>
+                    <View style={styles.routeLine} />
+                    <View style={styles.routePoint}>
+                      <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={12} color={colors.error} />
+                      <Text style={styles.routeCity}>{ride.destination}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.rideDetails}>
+                    <View style={styles.detailItem}>
+                      <IconSymbol ios_icon_name="clock.fill" android_material_icon_name="access-time" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{departureTimeText}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{departureDateText}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <IconSymbol ios_icon_name="car.fill" android_material_icon_name="directions-car" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{vehicleText}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="event-seat" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{seatsText}</Text>
+                    </View>
+                  </View>
+
+                  {(ride.instantBook || ride.ladiesOnly || ride.acceptsParcels) && (
+                    <View style={styles.badges}>
+                      {ride.instantBook && (
+                        <View style={styles.badge}>
+                          <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="flash-on" size={12} color={colors.primary} />
+                          <Text style={styles.badgeText}>Instant</Text>
+                        </View>
+                      )}
+                      {ride.ladiesOnly && (
+                        <View style={styles.badge}>
+                          <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={12} color={colors.primary} />
+                          <Text style={styles.badgeText}>Ladies</Text>
+                        </View>
+                      )}
+                      {ride.acceptsParcels && (
+                        <View style={styles.badge}>
+                          <IconSymbol ios_icon_name="shippingbox.fill" android_material_icon_name="local-shipping" size={12} color={colors.primary} />
+                          <Text style={styles.badgeText}>Parcels</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -210,78 +340,147 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    padding: 16,
   },
   header: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
+    marginBottom: 24,
   },
-  logo: {
+  title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 4,
+    color: colors.text,
   },
-  tagline: {
+  subtitle: {
     fontSize: 16,
     color: colors.textSecondary,
+    marginTop: 4,
   },
   searchCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    padding: 16,
+    marginBottom: 24,
   },
-  searchTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 8,
+    marginTop: 12,
   },
-  inputContainer: {
+  dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.background,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  input: {
+  dropdownText: {
+    fontSize: 16,
+    color: colors.text,
     flex: 1,
     marginLeft: 12,
+  },
+  placeholderText: {
+    color: colors.textSecondary,
+  },
+  dropdownList: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    marginTop: 8,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dropdownItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  dropdownItemText: {
     fontSize: 16,
     color: colors.text,
   },
-  searchButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
+  filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  filterButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  filtersContainer: {
+    marginBottom: 16,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginTop: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.textSecondary,
     marginTop: 8,
   },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  resultsContainer: {
+    marginBottom: 24,
   },
-  ridesSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+  resultsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: colors.text,
+  },
+  resultsSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
     marginBottom: 16,
   },
   rideCard: {
@@ -291,56 +490,96 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   rideHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  routeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  cityText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginHorizontal: 8,
-  },
-  priceText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  rideDetails: {
     marginBottom: 16,
   },
-  detailRow: {
+  driverInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  driverAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  priceContainer: {
+    alignItems: 'flex-end',
+  },
+  price: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  routeContainer: {
+    marginBottom: 16,
+  },
+  routePoint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeCity: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginLeft: 12,
+  },
+  routeLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: colors.border,
+    marginLeft: 5,
+    marginVertical: 4,
+  },
+  rideDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   detailText: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginLeft: 8,
+    marginLeft: 6,
   },
-  bookButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    paddingVertical: 12,
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  badge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
-  bookButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  badgeText: {
+    fontSize: 12,
+    color: colors.primary,
+    marginLeft: 4,
     fontWeight: '600',
   },
 });

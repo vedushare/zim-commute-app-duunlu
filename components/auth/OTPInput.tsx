@@ -11,7 +11,7 @@ interface OTPInputProps {
 }
 
 export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputProps) {
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   const handleChangeText = (text: string, index: number) => {

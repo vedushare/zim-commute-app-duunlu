@@ -22,11 +22,11 @@ export interface CustomModalProps {
   title: string;
   message: string;
   type?: 'info' | 'success' | 'error' | 'warning';
-  buttons?: Array<{
+  buttons?: {
     text: string;
     onPress: () => void;
     style?: 'default' | 'cancel' | 'destructive';
-  }>;
+  }[];
   onClose?: () => void;
 }
 

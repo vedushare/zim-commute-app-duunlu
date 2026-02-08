@@ -364,6 +364,3 @@ export const setupErrorLogging = () => {
 if (__DEV__) {
   setupErrorLogging();
 }
-
-// Export for use in other files
-export { getLogServerUrl };

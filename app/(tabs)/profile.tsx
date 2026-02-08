@@ -20,9 +20,19 @@ export default function ProfileScreen() {
     // Navigate to profile edit screen (to be implemented)
   };
 
-  const handleMyRides = () => {
-    console.log('User tapped My Rides');
-    // Navigate to rides screen (to be implemented)
+  const handlePostRide = () => {
+    console.log('User tapped Post Ride');
+    router.push('/rides/post-ride');
+  };
+
+  const handleMyBookings = () => {
+    console.log('User tapped My Bookings');
+    router.push('/bookings/my-bookings');
+  };
+
+  const handleMyVehicles = () => {
+    console.log('User tapped My Vehicles');
+    router.push('/vehicles/add-vehicle');
   };
 
   const handleWallet = () => {
@@ -46,13 +56,11 @@ export default function ProfileScreen() {
     setShowLogoutModal(false);
     
     try {
-      // Clear local state immediately (following the "Logout Robustness" rule)
       await logout();
       console.log('[Profile] Logout successful, redirecting to login');
       router.replace('/auth/phone-login');
     } catch (error) {
       console.error('[Profile] Error during logout:', error);
-      // Still redirect to login even if there's an error
       router.replace('/auth/phone-login');
     } finally {
       setIsLoggingOut(false);
@@ -65,6 +73,7 @@ export default function ProfileScreen() {
   const userTypeDisplay = user?.userType || 'Not set';
   const homeCityDisplay = user?.homeCity || 'Not set';
   const verificationLevel = user?.verificationLevel || 'PhoneVerified';
+  const isDriver = user?.userType === 'Driver';
 
   return (
     <>
@@ -142,15 +151,55 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             
-            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
+            {isDriver && (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handlePostRide}>
+                  <View style={styles.menuItemLeft}>
+                    <IconSymbol
+                      ios_icon_name="plus.circle.fill"
+                      android_material_icon_name="add-circle"
+                      size={24}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.menuItemText}>Post a Ride</Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.menuItem} onPress={handleMyVehicles}>
+                  <View style={styles.menuItemLeft}>
+                    <IconSymbol
+                      ios_icon_name="car.fill"
+                      android_material_icon_name="directions-car"
+                      size={24}
+                      color={colors.text}
+                    />
+                    <Text style={styles.menuItemText}>My Vehicles</Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleMyBookings}>
               <View style={styles.menuItemLeft}>
                 <IconSymbol
-                  ios_icon_name="pencil"
-                  android_material_icon_name="edit"
+                  ios_icon_name="ticket.fill"
+                  android_material_icon_name="confirmation-number"
                   size={24}
                   color={colors.text}
                 />
-                <Text style={styles.menuItemText}>Edit Profile</Text>
+                <Text style={styles.menuItemText}>My Bookings</Text>
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
@@ -160,15 +209,15 @@ export default function ProfileScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleMyRides}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
               <View style={styles.menuItemLeft}>
                 <IconSymbol
-                  ios_icon_name="car.fill"
-                  android_material_icon_name="directions-car"
+                  ios_icon_name="pencil"
+                  android_material_icon_name="edit"
                   size={24}
                   color={colors.text}
                 />
-                <Text style={styles.menuItemText}>My Rides</Text>
+                <Text style={styles.menuItemText}>Edit Profile</Text>
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"

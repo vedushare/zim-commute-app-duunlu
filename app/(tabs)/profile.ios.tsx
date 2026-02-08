@@ -2,12 +2,12 @@
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { colors } from "@/styles/commonStyles";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 import { VerificationBadge } from "@/components/auth/VerificationBadge";
 import { useRouter } from "expo-router";
-import Button from "@/components/button";
+import { CustomModal } from "@/components/ui/CustomModal";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -20,9 +20,19 @@ export default function ProfileScreen() {
     // Navigate to profile edit screen (to be implemented)
   };
 
-  const handleMyRides = () => {
-    console.log('User tapped My Rides');
-    // Navigate to rides screen (to be implemented)
+  const handlePostRide = () => {
+    console.log('User tapped Post Ride');
+    router.push('/rides/post-ride');
+  };
+
+  const handleMyBookings = () => {
+    console.log('User tapped My Bookings');
+    router.push('/bookings/my-bookings');
+  };
+
+  const handleMyVehicles = () => {
+    console.log('User tapped My Vehicles');
+    router.push('/vehicles/add-vehicle');
   };
 
   const handleWallet = () => {
@@ -41,16 +51,17 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    console.log('User confirmed logout');
+    console.log('[Profile] User confirmed logout');
     setIsLoggingOut(true);
+    setShowLogoutModal(false);
     
     try {
       await logout();
-      setShowLogoutModal(false);
-      console.log('Logout successful, redirecting to login');
+      console.log('[Profile] Logout successful, redirecting to login');
       router.replace('/auth/phone-login');
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('[Profile] Error during logout:', error);
+      router.replace('/auth/phone-login');
     } finally {
       setIsLoggingOut(false);
     }
@@ -62,6 +73,7 @@ export default function ProfileScreen() {
   const userTypeDisplay = user?.userType || 'Not set';
   const homeCityDisplay = user?.homeCity || 'Not set';
   const verificationLevel = user?.verificationLevel || 'PhoneVerified';
+  const isDriver = user?.userType === 'Driver';
 
   return (
     <>
@@ -139,15 +151,55 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             
-            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
+            {isDriver && (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handlePostRide}>
+                  <View style={styles.menuItemLeft}>
+                    <IconSymbol
+                      ios_icon_name="plus.circle.fill"
+                      android_material_icon_name="add-circle"
+                      size={24}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.menuItemText}>Post a Ride</Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.menuItem} onPress={handleMyVehicles}>
+                  <View style={styles.menuItemLeft}>
+                    <IconSymbol
+                      ios_icon_name="car.fill"
+                      android_material_icon_name="directions-car"
+                      size={24}
+                      color={colors.text}
+                    />
+                    <Text style={styles.menuItemText}>My Vehicles</Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleMyBookings}>
               <View style={styles.menuItemLeft}>
                 <IconSymbol
-                  ios_icon_name="pencil"
-                  android_material_icon_name="edit"
+                  ios_icon_name="ticket.fill"
+                  android_material_icon_name="confirmation-number"
                   size={24}
                   color={colors.text}
                 />
-                <Text style={styles.menuItemText}>Edit Profile</Text>
+                <Text style={styles.menuItemText}>My Bookings</Text>
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
@@ -157,15 +209,15 @@ export default function ProfileScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleMyRides}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
               <View style={styles.menuItemLeft}>
                 <IconSymbol
-                  ios_icon_name="car.fill"
-                  android_material_icon_name="directions-car"
+                  ios_icon_name="pencil"
+                  android_material_icon_name="edit"
                   size={24}
                   color={colors.text}
                 />
-                <Text style={styles.menuItemText}>My Rides</Text>
+                <Text style={styles.menuItemText}>Edit Profile</Text>
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
@@ -227,44 +279,27 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </SafeAreaView>
 
-      <Modal
-        visible={showLogoutModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sign Out</Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to sign out?
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <Button
-                onPress={() => setShowLogoutModal(false)}
-                variant="secondary"
-                disabled={isLoggingOut}
-                style={styles.modalButton}
-              >
-                Cancel
-              </Button>
-              
-              <Button
-                onPress={handleLogout}
-                variant="primary"
-                loading={isLoggingOut}
-                disabled={isLoggingOut}
-                style={styles.modalButton}
-              >
-                Sign Out
-              </Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <CustomModal
+          visible={showLogoutModal}
+          title="Sign Out"
+          message="Are you sure you want to sign out?"
+          type="warning"
+          buttons={[
+            {
+              text: 'Cancel',
+              onPress: () => setShowLogoutModal(false),
+              style: 'cancel',
+            },
+            {
+              text: 'Sign Out',
+              onPress: handleLogout,
+              style: 'destructive',
+            },
+          ]}
+          onClose={() => setShowLogoutModal(false)}
+        />
+      </SafeAreaView>
     </>
   );
 }
@@ -397,39 +432,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.danger,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
   },
 });

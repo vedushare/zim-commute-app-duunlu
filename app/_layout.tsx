@@ -61,7 +61,7 @@ function RootLayoutNav() {
         router.replace('/(tabs)/(home)');
       }
     }
-  }, [isLoading, isAuthenticated, segments, user]);
+  }, [isLoading, isAuthenticated, segments, user, router]);
 
   // Show loading screen while checking auth
   if (isLoading) {

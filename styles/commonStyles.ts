@@ -15,6 +15,7 @@ export const colors = {
   success: '#009A44',      // Green for success
   warning: '#FFD100',      // Yellow for warnings
   danger: '#EF2B2D',       // Red for errors
+  error: '#EF2B2D',        // Red for errors (alias)
   black: '#000000',        // Zimbabwe Black
 };
 
