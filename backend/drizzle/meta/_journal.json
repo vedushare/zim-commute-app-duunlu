@@ -15,6 +15,13 @@
       "when": 1770536316766,
       "tag": "20260208073836_tan_kat_farrell",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770542149109,
+      "tag": "20260208091549_long_sunspot",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, decimal, jsonb, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, decimal, jsonb, foreignKey, numeric } from 'drizzle-orm/pg-core';
 
 /**
  * Users table for phone authentication system
@@ -81,4 +81,75 @@ export const bookings = pgTable('bookings', {
   bookingCode: text('booking_code').notNull().unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+/**
+ * Verification documents table for trust and safety
+ */
+export const verificationDocuments = pgTable('verification_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  documentType: text('document_type', { enum: ['NationalID', 'Passport', 'DriversLicense', 'VehicleRegistration', 'Selfie'] }).notNull(),
+  documentUrl: text('document_url').notNull(),
+  status: text('status', { enum: ['pending', 'approved', 'rejected'] }).notNull().default('pending'),
+  rejectionReason: text('rejection_reason'),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+});
+
+/**
+ * Emergency contacts table
+ */
+export const emergencyContacts = pgTable('emergency_contacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  phoneNumber: text('phone_number').notNull(),
+  relationship: text('relationship').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Ratings table for driver/passenger ratings
+ */
+export const ratings = pgTable('ratings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }),
+  rideId: uuid('ride_id').notNull().references(() => rides.id, { onDelete: 'cascade' }),
+  raterId: uuid('rater_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ratedUserId: uuid('rated_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  rating: integer('rating').notNull(), // 1-5
+  comment: text('comment'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Reports table for safety reporting
+ */
+export const reports = pgTable('reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reporterId: uuid('reporter_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reportedUserId: uuid('reported_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  rideId: uuid('ride_id').references(() => rides.id, { onDelete: 'cascade' }),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }),
+  category: text('category', { enum: ['Safety', 'Vehicle', 'Behavior', 'Payment'] }).notNull(),
+  description: text('description').notNull(),
+  evidenceUrls: jsonb('evidence_urls'), // Array of file URLs
+  status: text('status', { enum: ['open', 'investigating', 'resolved', 'closed'] }).notNull().default('open'),
+  adminNotes: text('admin_notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * SOS alerts table
+ */
+export const sosAlerts = pgTable('sos_alerts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  rideId: uuid('ride_id').references(() => rides.id, { onDelete: 'cascade' }),
+  locationLat: numeric('location_lat', { precision: 10, scale: 7 }),
+  locationLng: numeric('location_lng', { precision: 10, scale: 7 }),
+  status: text('status', { enum: ['active', 'resolved'] }).notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
