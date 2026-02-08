@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   ActivityIndicator,
@@ -10,8 +11,8 @@ import {
 } from "react-native";
 import { appleBlue, zincColors } from "@/constants/Colors";
 
-type ButtonVariant = "filled" | "outline" | "ghost";
-type ButtonSize = "sm" | "md" | "lg";
+type ButtonVariant = "filled" | "outline" | "ghost" | "primary";
+type ButtonSize = "sm" | "md" | "lg" | "small" | "medium" | "large";
 
 interface ButtonProps {
   onPress?: () => void;
@@ -19,7 +20,8 @@ interface ButtonProps {
   size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  title?: string;
   style?: ViewStyle;
   textStyle?: TextStyle;
 }
@@ -31,14 +33,25 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   loading = false,
   children,
+  title,
   style,
   textStyle,
 }) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
 
+  // Normalize variant (map "primary" to "filled")
+  const normalizedVariant = variant === "primary" ? "filled" : variant;
+
+  // Normalize size (map "small"/"medium"/"large" to "sm"/"md"/"lg")
+  const normalizedSize: "sm" | "md" | "lg" = 
+    size === "small" ? "sm" :
+    size === "medium" ? "md" :
+    size === "large" ? "lg" :
+    (size as "sm" | "md" | "lg");
+
   const sizeStyles: Record<
-    ButtonSize,
+    "sm" | "md" | "lg",
     { height: number; fontSize: number; padding: number }
   > = {
     sm: { height: 36, fontSize: 14, padding: 12 },
@@ -54,7 +67,7 @@ export const Button: React.FC<ButtonProps> = ({
       justifyContent: "center",
     };
 
-    switch (variant) {
+    switch (normalizedVariant) {
       case "filled":
         return {
           ...baseStyle,
@@ -72,6 +85,8 @@ export const Button: React.FC<ButtonProps> = ({
           ...baseStyle,
           backgroundColor: "transparent",
         };
+      default:
+        return baseStyle;
     }
   };
 
@@ -80,14 +95,19 @@ export const Button: React.FC<ButtonProps> = ({
       return isDark ? zincColors[500] : zincColors[400];
     }
 
-    switch (variant) {
+    switch (normalizedVariant) {
       case "filled":
         return isDark ? zincColors[900] : zincColors[50];
       case "outline":
       case "ghost":
         return appleBlue;
+      default:
+        return isDark ? zincColors[900] : zincColors[50];
     }
   };
+
+  // Use title prop if provided, otherwise use children
+  const buttonContent = title || children;
 
   return (
     <Pressable
@@ -96,8 +116,8 @@ export const Button: React.FC<ButtonProps> = ({
       style={[
         getVariantStyle(),
         {
-          height: sizeStyles[size].height,
-          paddingHorizontal: sizeStyles[size].padding,
+          height: sizeStyles[normalizedSize].height,
+          paddingHorizontal: sizeStyles[normalizedSize].padding,
           opacity: disabled ? 0.5 : 1,
         },
         style,
@@ -109,7 +129,7 @@ export const Button: React.FC<ButtonProps> = ({
         <Text
           style={StyleSheet.flatten([
             {
-              fontSize: sizeStyles[size].fontSize,
+              fontSize: sizeStyles[normalizedSize].fontSize,
               color: getTextColor(),
               textAlign: "center",
               marginBottom: 0,
@@ -118,7 +138,7 @@ export const Button: React.FC<ButtonProps> = ({
             textStyle,
           ])}
         >
-          {children}
+          {buttonContent}
         </Text>
       )}
     </Pressable>
