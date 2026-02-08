@@ -1,306 +1,325 @@
 
+import { useRouter } from "expo-router";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from "react-native";
+import { VerificationBadge } from "@/components/auth/VerificationBadge";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/contexts/AuthContext";
+import { IconSymbol } from "@/components/IconSymbol";
+import { CustomModal } from "@/components/ui/CustomModal";
 import React, { useState } from "react";
 import { colors } from "@/styles/commonStyles";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from "react-native";
-import { IconSymbol } from "@/components/IconSymbol";
-import { useAuth } from "@/contexts/AuthContext";
-import { VerificationBadge } from "@/components/auth/VerificationBadge";
-import { useRouter } from "expo-router";
-import { CustomModal } from "@/components/ui/CustomModal";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleEditProfile = () => {
-    console.log('User tapped Edit Profile');
-    // Navigate to profile edit screen (to be implemented)
+    console.log('[Profile] User tapped Edit Profile');
+    router.push('/auth/profile-setup');
   };
 
   const handlePostRide = () => {
-    console.log('User tapped Post Ride');
+    console.log('[Profile] User tapped Post a Ride');
     router.push('/rides/post-ride');
   };
 
   const handleMyBookings = () => {
-    console.log('User tapped My Bookings');
+    console.log('[Profile] User tapped My Bookings');
     router.push('/bookings/my-bookings');
   };
 
   const handleMyVehicles = () => {
-    console.log('User tapped My Vehicles');
+    console.log('[Profile] User tapped My Vehicles');
     router.push('/vehicles/add-vehicle');
   };
 
   const handleWallet = () => {
-    console.log('User tapped Wallet');
-    // Navigate to wallet screen (to be implemented)
+    console.log('[Profile] User tapped Wallet');
+    // TODO: Implement wallet screen
   };
 
   const handleSettings = () => {
-    console.log('User tapped Settings');
-    // Navigate to settings screen (to be implemented)
+    console.log('[Profile] User tapped Settings');
+    // TODO: Implement settings screen
   };
 
   const handleVerifyID = () => {
-    console.log('User tapped Verify ID');
-    // Navigate to ID verification screen (to be implemented)
+    console.log('[Profile] User tapped Verify ID');
+    router.push('/safety/verify-id');
+  };
+
+  const handleEmergencyContacts = () => {
+    console.log('[Profile] User tapped Emergency Contacts');
+    router.push('/safety/emergency-contacts');
+  };
+
+  const handleMyRatings = () => {
+    console.log('[Profile] User tapped My Ratings');
+    // TODO: Implement my ratings screen
+  };
+
+  const handleMyReports = () => {
+    console.log('[Profile] User tapped My Reports');
+    // TODO: Implement my reports screen
   };
 
   const handleLogout = async () => {
     console.log('[Profile] User confirmed logout');
-    setIsLoggingOut(true);
     setShowLogoutModal(false);
-    
     try {
       await logout();
-      console.log('[Profile] Logout successful, redirecting to login');
-      router.replace('/auth/phone-login');
+      console.log('[Profile] Logout successful');
     } catch (error) {
-      console.error('[Profile] Error during logout:', error);
-      router.replace('/auth/phone-login');
-    } finally {
-      setIsLoggingOut(false);
+      console.error('[Profile] Logout error:', error);
     }
   };
 
-  const fullNameDisplay = user?.fullName || 'User';
-  const phoneDisplay = user?.phoneNumber || '';
-  const emailDisplay = user?.email || 'No email';
-  const userTypeDisplay = user?.userType || 'Not set';
-  const homeCityDisplay = user?.homeCity || 'Not set';
-  const verificationLevel = user?.verificationLevel || 'PhoneVerified';
-  const isDriver = user?.userType === 'Driver';
+  const verificationLevelText = user?.verificationLevel === 'FullyVerified' ? 'Verified' :
+                                user?.verificationLevel === 'IDUploaded' ? 'Pending' : 'Phone Verified';
 
   return (
-    <>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView style={styles.scrollView}>
-          <View style={styles.header}>
-            <View style={styles.avatarContainer}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <View style={styles.profileImageContainer}>
+            {user?.profilePhotoUrl ? (
+              <View style={styles.profileImage} />
+            ) : (
+              <View style={styles.profileImagePlaceholder}>
+                <IconSymbol
+                  ios_icon_name="person.circle.fill"
+                  android_material_icon_name="account-circle"
+                  size={80}
+                  color={colors.primary}
+                />
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{user?.fullName || 'User'}</Text>
+            <Text style={styles.profilePhone}>{user?.phoneNumber}</Text>
+            <View style={styles.verificationContainer}>
+              <VerificationBadge level={user?.verificationLevel || 'PhoneVerified'} />
+              <Text style={styles.verificationText}>{verificationLevelText}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
+            <IconSymbol
+              ios_icon_name="pencil.circle.fill"
+              android_material_icon_name="edit"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={handlePostRide}>
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="person.circle.fill"
-                android_material_icon_name="account-circle"
-                size={80}
+                ios_icon_name="plus.circle.fill"
+                android_material_icon_name="add-circle"
+                size={24}
                 color={colors.primary}
               />
+              <Text style={styles.menuItemText}>Post a Ride</Text>
             </View>
-            
-            <Text style={styles.name}>{fullNameDisplay}</Text>
-            <Text style={styles.phone}>{phoneDisplay}</Text>
-            
-            <View style={styles.badgeContainer}>
-              <VerificationBadge level={verificationLevel} size="medium" />
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={handleMyBookings}>
+            <View style={styles.menuItemLeft}>
+              <IconSymbol
+                ios_icon_name="list.bullet.circle.fill"
+                android_material_icon_name="list"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.menuItemText}>My Bookings</Text>
             </View>
-          </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account Information</Text>
-            
-            <View style={styles.infoCard}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{emailDisplay}</Text>
-              </View>
-              
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>User Type</Text>
-                <Text style={styles.infoValue}>{userTypeDisplay}</Text>
-              </View>
-              
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Home City</Text>
-                <Text style={styles.infoValue}>{homeCityDisplay}</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={handleMyVehicles}>
+            <View style={styles.menuItemLeft}>
+              <IconSymbol
+                ios_icon_name="car.circle.fill"
+                android_material_icon_name="drive-eta"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.menuItemText}>My Vehicles</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Trust & Safety</Text>
+          
+          <TouchableOpacity style={styles.menuItem} onPress={handleVerifyID}>
+            <View style={styles.menuItemLeft}>
+              <IconSymbol
+                ios_icon_name="checkmark.shield.fill"
+                android_material_icon_name="verified-user"
+                size={24}
+                color={colors.success}
+              />
+              <View>
+                <Text style={styles.menuItemText}>Verify Your Identity</Text>
+                {user?.verificationLevel !== 'FullyVerified' && (
+                  <Text style={styles.menuItemSubtext}>Get verified to build trust</Text>
+                )}
               </View>
             </View>
-          </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-          {verificationLevel !== 'FullyVerified' && (
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.verifyCard}
-                onPress={handleVerifyID}
-              >
-                <View style={styles.verifyContent}>
-                  <IconSymbol
-                    ios_icon_name="checkmark.shield.fill"
-                    android_material_icon_name="verified-user"
-                    size={32}
-                    color={colors.secondary}
-                  />
-                  <View style={styles.verifyText}>
-                    <Text style={styles.verifyTitle}>Complete Verification</Text>
-                    <Text style={styles.verifySubtitle}>
-                      Upload your ID to unlock all features
-                    </Text>
-                  </View>
-                </View>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="chevron-right"
-                  size={24}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={handleEmergencyContacts}>
+            <View style={styles.menuItemLeft}>
+              <IconSymbol
+                ios_icon_name="phone.circle.fill"
+                android_material_icon_name="phone"
+                size={24}
+                color={colors.error}
+              />
+              <Text style={styles.menuItemText}>Emergency Contacts</Text>
             </View>
-          )}
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            
-            {isDriver && (
-              <>
-                <TouchableOpacity style={styles.menuItem} onPress={handlePostRide}>
-                  <View style={styles.menuItemLeft}>
-                    <IconSymbol
-                      ios_icon_name="plus.circle.fill"
-                      android_material_icon_name="add-circle"
-                      size={24}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.menuItemText}>Post a Ride</Text>
-                  </View>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron-right"
-                    size={24}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.menuItem} onPress={handleMyVehicles}>
-                  <View style={styles.menuItemLeft}>
-                    <IconSymbol
-                      ios_icon_name="car.fill"
-                      android_material_icon_name="directions-car"
-                      size={24}
-                      color={colors.text}
-                    />
-                    <Text style={styles.menuItemText}>My Vehicles</Text>
-                  </View>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron-right"
-                    size={24}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </>
-            )}
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleMyBookings}>
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="ticket.fill"
-                  android_material_icon_name="confirmation-number"
-                  size={24}
-                  color={colors.text}
-                />
-                <Text style={styles.menuItemText}>My Bookings</Text>
-              </View>
+          <TouchableOpacity style={styles.menuItem} onPress={handleMyRatings}>
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
+                ios_icon_name="star.circle.fill"
+                android_material_icon_name="star"
                 size={24}
-                color={colors.textSecondary}
+                color={colors.warning}
               />
-            </TouchableOpacity>
+              <Text style={styles.menuItemText}>My Ratings & Reviews</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="pencil"
-                  android_material_icon_name="edit"
-                  size={24}
-                  color={colors.text}
-                />
-                <Text style={styles.menuItemText}>Edit Profile</Text>
-              </View>
+          <TouchableOpacity style={styles.menuItem} onPress={handleMyReports}>
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
+                ios_icon_name="exclamationmark.shield.fill"
+                android_material_icon_name="report"
                 size={24}
-                color={colors.textSecondary}
+                color={colors.error}
               />
-            </TouchableOpacity>
+              <Text style={styles.menuItemText}>My Reports</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleWallet}>
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="wallet.pass.fill"
-                  android_material_icon_name="account-balance-wallet"
-                  size={24}
-                  color={colors.text}
-                />
-                <Text style={styles.menuItemText}>Wallet</Text>
-              </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={handleWallet}>
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
+                ios_icon_name="creditcard.circle.fill"
+                android_material_icon_name="payment"
                 size={24}
-                color={colors.textSecondary}
+                color={colors.primary}
               />
-            </TouchableOpacity>
+              <Text style={styles.menuItemText}>Wallet</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="gear"
-                  android_material_icon_name="settings"
-                  size={24}
-                  color={colors.text}
-                />
-                <Text style={styles.menuItemText}>Settings</Text>
-              </View>
+          <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
+                ios_icon_name="gearshape.circle.fill"
+                android_material_icon_name="settings"
                 size={24}
-                color={colors.textSecondary}
+                color={colors.primary}
               />
-            </TouchableOpacity>
-          </View>
+              <Text style={styles.menuItemText}>Settings</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
 
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={() => setShowLogoutModal(true)}
-            >
+          <TouchableOpacity
+            style={[styles.menuItem, styles.logoutItem]}
+            onPress={() => setShowLogoutModal(true)}
+          >
+            <View style={styles.menuItemLeft}>
               <IconSymbol
-                ios_icon_name="arrow.right.square"
+                ios_icon_name="arrow.right.circle.fill"
                 android_material_icon_name="logout"
                 size={24}
-                color={colors.danger}
+                color={colors.error}
               />
-              <Text style={styles.logoutText}>Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+              <Text style={[styles.menuItemText, styles.logoutText]}>Logout</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
-        <CustomModal
-          visible={showLogoutModal}
-          title="Sign Out"
-          message="Are you sure you want to sign out?"
-          type="warning"
-          buttons={[
-            {
-              text: 'Cancel',
-              onPress: () => setShowLogoutModal(false),
-              style: 'cancel',
-            },
-            {
-              text: 'Sign Out',
-              onPress: handleLogout,
-              style: 'destructive',
-            },
-          ]}
-          onClose={() => setShowLogoutModal(false)}
-        />
-      </SafeAreaView>
-    </>
+      <CustomModal
+        isVisible={showLogoutModal}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutModal(false)}
+        confirmText="Logout"
+        cancelText="Cancel"
+      />
+    </SafeAreaView>
   );
 }
 
@@ -308,130 +327,113 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: Platform.OS === 'android' ? 48 : 0,
   },
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 100,
+  },
   header: {
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 20,
-    backgroundColor: colors.backgroundAlt,
-  },
-  avatarContainer: {
-    marginBottom: 16,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  phone: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  badgeContainer: {
-    marginTop: 8,
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  infoCard: {
+    padding: 24,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  infoLabel: {
+  profileImageContainer: {
+    marginBottom: 16,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.border,
+  },
+  profileImagePlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInfo: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  profilePhone: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  verificationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verificationText: {
     fontSize: 14,
     color: colors.textSecondary,
   },
-  infoValue: {
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '10',
+  },
+  editButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.primary,
   },
-  verifyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.secondary,
-    borderRadius: 12,
-    padding: 16,
+  section: {
+    marginTop: 24,
+    paddingHorizontal: 16,
   },
-  verifyContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  verifyText: {
-    flex: 1,
-  },
-  verifyTitle: {
+  sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.black,
-    marginBottom: 4,
-  },
-  verifySubtitle: {
-    fontSize: 14,
-    color: colors.black,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.card,
-    borderRadius: 12,
     padding: 16,
+    borderRadius: 12,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   menuItemText: {
     fontSize: 16,
-    fontWeight: '600',
     color: colors.text,
   },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.danger,
-    gap: 12,
+  menuItemSubtext: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  logoutItem: {
+    marginTop: 8,
   },
   logoutText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.danger,
+    color: colors.error,
   },
 });

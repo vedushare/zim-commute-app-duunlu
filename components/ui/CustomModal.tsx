@@ -18,7 +18,8 @@ import {
 import { colors } from '@/styles/commonStyles';
 
 export interface CustomModalProps {
-  visible: boolean;
+  visible?: boolean;
+  isVisible?: boolean; // Alternative prop name for compatibility
   title: string;
   message: string;
   type?: 'info' | 'success' | 'error' | 'warning';
@@ -28,20 +29,54 @@ export interface CustomModalProps {
     style?: 'default' | 'cancel' | 'destructive';
   }[];
   onClose?: () => void;
+  // Simple confirmation pattern props
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 export function CustomModal({
   visible,
+  isVisible,
   title,
   message,
   type = 'info',
   buttons = [],
   onClose,
+  onConfirm,
+  onCancel,
+  confirmText = 'OK',
+  cancelText = 'Cancel',
 }: CustomModalProps) {
-  const defaultButtons = buttons.length > 0 ? buttons : [
+  // Support both visible and isVisible props
+  const isModalVisible = visible ?? isVisible ?? false;
+  
+  // Build buttons array from simple props if provided
+  let modalButtons = buttons;
+  
+  if (buttons.length === 0 && (onConfirm || onCancel)) {
+    modalButtons = [];
+    if (onCancel) {
+      modalButtons.push({
+        text: cancelText,
+        onPress: onCancel,
+        style: 'cancel' as const,
+      });
+    }
+    if (onConfirm) {
+      modalButtons.push({
+        text: confirmText,
+        onPress: onConfirm,
+        style: 'default' as const,
+      });
+    }
+  }
+  
+  const defaultButtons = modalButtons.length > 0 ? modalButtons : [
     {
       text: 'OK',
-      onPress: onClose || (() => {}),
+      onPress: onClose || onConfirm || (() => {}),
       style: 'default' as const,
     },
   ];
@@ -61,10 +96,10 @@ export function CustomModal({
 
   return (
     <Modal
-      visible={visible}
+      visible={isModalVisible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={onClose || onCancel}
     >
       <View style={styles.overlay}>
         <View style={styles.container}>

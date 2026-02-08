@@ -22,7 +22,7 @@ const TOKEN_KEY = 'zimcommute_auth_token';
 /**
  * Get the stored authentication token
  */
-async function getAuthToken(): Promise<string | null> {
+export async function getAuthToken(): Promise<string | null> {
   try {
     return await SecureStore.getItemAsync(TOKEN_KEY);
   } catch (error) {

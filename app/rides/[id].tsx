@@ -1,5 +1,14 @@
 
+import { colors } from '@/styles/commonStyles';
+import { VerificationBadge } from '@/components/auth/VerificationBadge';
 import React, { useState, useEffect } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Button from '@/components/button';
+import { CustomModal } from '@/components/ui/CustomModal';
+import { getRideDetails, createBooking } from '@/utils/ridesApi';
+import { Ride } from '@/types/rides';
+import { IconSymbol } from '@/components/IconSymbol';
+import { SOSButton } from '@/components/safety/SOSButton';
 import {
   View,
   Text,
@@ -9,86 +18,119 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
-import { CustomModal } from '@/components/ui/CustomModal';
-import { VerificationBadge } from '@/components/auth/VerificationBadge';
-import { getRideDetails, createBooking } from '@/utils/ridesApi';
-import { Ride } from '@/types/rides';
-import Button from '@/components/button';
 
 export default function RideDetailsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  
-  const [loading, setLoading] = useState(true);
-  const [booking, setBooking] = useState(false);
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [ride, setRide] = useState<Ride | null>(null);
-  const [seatsToBook, setSeatsToBook] = useState(1);
-  
-  const [errorModal, setErrorModal] = useState({ visible: false, message: '' });
-  const [successModal, setSuccessModal] = useState({ visible: false, message: '', bookingCode: '' });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBooking, setIsBooking] = useState(false);
+  const [selectedSeats, setSelectedSeats] = useState(1);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
 
   useEffect(() => {
-    loadRideDetails();
-  }, [id]); // loadRideDetails is stable, no need to include
+    if (id) {
+      loadRideDetails();
+    }
+  }, [id]);
 
   const loadRideDetails = async () => {
+    setIsLoading(true);
     try {
-      setLoading(true);
-      console.log('Loading ride details:', id);
-      const data = await getRideDetails(id as string);
+      const data = await getRideDetails(id);
       setRide(data);
+      console.log('[RideDetails] Loaded ride:', data.id);
     } catch (error: any) {
-      console.error('Failed to load ride details:', error);
-      setErrorModal({ visible: true, message: error.message || 'Failed to load ride details' });
+      console.error('[RideDetails] Error loading ride:', error);
+      showModal('Error', error.message || 'Failed to load ride details');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const showModal = (title: string, message: string) => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalVisible(true);
   };
 
   const handleBookRide = async () => {
     if (!ride) return;
 
-    if (seatsToBook > ride.availableSeats) {
-      setErrorModal({ visible: true, message: `Only ${ride.availableSeats} seats available` });
+    if (selectedSeats > ride.availableSeats) {
+      showModal('Error', 'Not enough seats available');
       return;
     }
 
+    setIsBooking(true);
+    console.log('[RideDetails] Booking', selectedSeats, 'seats for ride:', id);
+
     try {
-      setBooking(true);
-      console.log('Booking ride:', id, seatsToBook, 'seats');
-      
-      const result = await createBooking({
-        rideId: ride.id,
-        seatsBooked: seatsToBook,
+      const booking = await createBooking({
+        rideId: id,
+        seatsBooked: selectedSeats,
       });
 
-      const totalPriceText = `$${result.totalPrice.toFixed(2)}`;
-      const statusText = result.status === 'confirmed' ? 'confirmed' : 'pending confirmation';
-      const messageText = `Booking ${statusText}! Total: ${totalPriceText}`;
-      
-      setSuccessModal({ 
-        visible: true, 
-        message: messageText,
-        bookingCode: result.bookingCode,
-      });
-      
+      showModal(
+        'Booking Confirmed!',
+        `Your booking code is: ${booking.bookingCode}\n\nPlease save this code for your records.`
+      );
+      console.log('[RideDetails] Booking successful:', booking.id);
+
       setTimeout(() => {
         router.push('/bookings/my-bookings');
       }, 2000);
     } catch (error: any) {
-      console.error('Failed to book ride:', error);
-      setErrorModal({ visible: true, message: error.message || 'Failed to book ride' });
+      console.error('[RideDetails] Booking error:', error);
+      showModal('Booking Failed', error.message || 'Failed to book ride. Please try again.');
     } finally {
-      setBooking(false);
+      setIsBooking(false);
     }
   };
 
-  if (loading) {
+  const handleShareRide = () => {
+    console.log('[RideDetails] User tapped Share My Ride');
+    router.push(`/safety/share-ride/${id}`);
+  };
+
+  const handleReportUser = () => {
+    if (!ride?.driver) return;
+    console.log('[RideDetails] User tapped Report Driver');
+    router.push({
+      pathname: '/safety/report-user',
+      params: {
+        userId: ride.driver.id,
+        rideId: id,
+      },
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const totalPrice = ride ? ride.pricePerSeat * selectedSeats : 0;
+  const formattedTotalPrice = `$${totalPrice.toFixed(2)}`;
+
+  if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: 'Ride Details', headerShown: true }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -100,212 +142,244 @@ export default function RideDetailsScreen() {
 
   if (!ride) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: 'Ride Details', headerShown: true }} />
-        <View style={styles.emptyContainer}>
-          <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="error" size={64} color={colors.error} />
-          <Text style={styles.emptyTitle}>Ride Not Found</Text>
-          <Button title="Go Back" onPress={() => router.back()} />
+        <View style={styles.errorContainer}>
+          <IconSymbol
+            ios_icon_name="exclamationmark.triangle.fill"
+            android_material_icon_name="warning"
+            size={48}
+            color={colors.error}
+          />
+          <Text style={styles.errorText}>Ride not found</Text>
+          <Button title="Go Back" onPress={() => router.back()} style={styles.backButton} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const formatTime = (dateString: string) => {
-    const d = new Date(dateString);
-    const hours = d.getHours().toString().padStart(2, '0');
-    const minutes = d.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const d = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    return d.toLocaleDateString('en-US', options);
-  };
-
   const departureTimeText = formatTime(ride.departureTime);
   const departureDateText = formatDate(ride.departureTime);
   const arrivalTimeText = formatTime(ride.arrivalTime);
-  const priceText = `$${ride.pricePerSeat.toFixed(2)}`;
-  const totalPriceText = `$${(ride.pricePerSeat * seatsToBook).toFixed(2)}`;
-  const vehicleText = `${ride.vehicle?.make} ${ride.vehicle?.model} (${ride.vehicle?.year})`;
-  const colorText = ride.vehicle?.color || 'Unknown';
-  const plateText = ride.vehicle?.licensePlate || 'N/A';
-  const driverName = ride.driver?.fullName || 'Unknown';
-  const driverCity = ride.driver?.homeCity || 'Unknown';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <Stack.Screen options={{ title: 'Ride Details', headerShown: true }} />
-      
+
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <View style={styles.routeContainer}>
+        <View style={styles.routeCard}>
+          <View style={styles.routeRow}>
             <View style={styles.routePoint}>
-              <IconSymbol ios_icon_name="circle.fill" android_material_icon_name="circle" size={16} color={colors.primary} />
+              <View style={styles.originDot} />
+              <Text style={styles.routeLabel}>From</Text>
               <Text style={styles.routeCity}>{ride.origin}</Text>
+              <Text style={styles.routeTime}>{departureTimeText}</Text>
+              <Text style={styles.routeDate}>{departureDateText}</Text>
             </View>
+
             <View style={styles.routeLine} />
-            {ride.viaPoints && ride.viaPoints.length > 0 && ride.viaPoints.map((point, index) => (
-              <React.Fragment key={index}>
-                <View style={styles.routePoint}>
-                  <IconSymbol ios_icon_name="circle" android_material_icon_name="circle" size={12} color={colors.textSecondary} />
-                  <Text style={styles.viaPoint}>{point}</Text>
-                </View>
-                <View style={styles.routeLine} />
-              </React.Fragment>
-            ))}
+
             <View style={styles.routePoint}>
-              <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={16} color={colors.error} />
+              <View style={styles.destinationDot} />
+              <Text style={styles.routeLabel}>To</Text>
               <Text style={styles.routeCity}>{ride.destination}</Text>
+              <Text style={styles.routeTime}>{arrivalTimeText}</Text>
             </View>
           </View>
+
+          {ride.viaPoints && ride.viaPoints.length > 0 && (
+            <View style={styles.viaPointsContainer}>
+              <Text style={styles.viaPointsLabel}>Via:</Text>
+              <Text style={styles.viaPointsText}>{ride.viaPoints.join(', ')}</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Schedule</Text>
-          <View style={styles.scheduleRow}>
-            <View style={styles.scheduleItem}>
-              <Text style={styles.scheduleLabel}>Departure</Text>
-              <Text style={styles.scheduleTime}>{departureTimeText}</Text>
-              <Text style={styles.scheduleDate}>{departureDateText}</Text>
-            </View>
-            <IconSymbol ios_icon_name="arrow.right" android_material_icon_name="arrow-forward" size={24} color={colors.textSecondary} />
-            <View style={styles.scheduleItem}>
-              <Text style={styles.scheduleLabel}>Arrival</Text>
-              <Text style={styles.scheduleTime}>{arrivalTimeText}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Driver</Text>
-          <View style={styles.driverInfo}>
+        <View style={styles.driverCard}>
+          <View style={styles.driverHeader}>
             <View style={styles.driverAvatar}>
-              <IconSymbol ios_icon_name="person.fill" android_material_icon_name="person" size={32} color={colors.primary} />
+              <IconSymbol
+                ios_icon_name="person.circle.fill"
+                android_material_icon_name="account-circle"
+                size={48}
+                color={colors.primary}
+              />
             </View>
-            <View style={styles.driverDetails}>
-              <Text style={styles.driverName}>{driverName}</Text>
-              <Text style={styles.driverCity}>{driverCity}</Text>
-              <VerificationBadge level={ride.driver?.verificationLevel || 'PhoneVerified'} size="small" />
+            <View style={styles.driverInfo}>
+              <View style={styles.driverNameRow}>
+                <Text style={styles.driverName}>{ride.driver?.fullName || 'Driver'}</Text>
+                <VerificationBadge level={ride.driver?.verificationLevel || 'PhoneVerified'} />
+              </View>
+              <View style={styles.ratingRow}>
+                <IconSymbol
+                  ios_icon_name="star.fill"
+                  android_material_icon_name="star"
+                  size={16}
+                  color="#FFD700"
+                />
+                <Text style={styles.ratingText}>4.8</Text>
+                <Text style={styles.ratingCount}>(24 trips)</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Vehicle</Text>
           <View style={styles.vehicleInfo}>
-            <IconSymbol ios_icon_name="car.fill" android_material_icon_name="directions-car" size={24} color={colors.primary} />
-            <View style={styles.vehicleDetails}>
-              <Text style={styles.vehicleText}>{vehicleText}</Text>
-              <Text style={styles.vehicleSubtext}>{colorText}</Text>
-              <Text style={styles.vehicleSubtext}>{plateText}</Text>
-            </View>
+            <IconSymbol
+              ios_icon_name="car.fill"
+              android_material_icon_name="drive-eta"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.vehicleText}>
+              {ride.vehicle?.color} {ride.vehicle?.make} {ride.vehicle?.model}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Pricing & Seats</Text>
-          <View style={styles.pricingRow}>
-            <View>
-              <Text style={styles.priceLabel}>Price per seat</Text>
-              <Text style={styles.price}>{priceText}</Text>
-            </View>
-            <View>
-              <Text style={styles.seatsLabel}>Available</Text>
-              <Text style={styles.seatsText}>
-                {ride.availableSeats}
-              </Text>
-              <Text style={styles.seatsSubtext}>seats</Text>
-            </View>
+        <View style={styles.detailsCard}>
+          <View style={styles.detailRow}>
+            <IconSymbol
+              ios_icon_name="person.2.fill"
+              android_material_icon_name="group"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.detailLabel}>Available Seats</Text>
+            <Text style={styles.detailValue}>{ride.availableSeats}</Text>
           </View>
 
-          <Text style={styles.selectSeatsLabel}>Select seats to book</Text>
-          <View style={styles.seatsSelector}>
-            {[1, 2, 3, 4, 5, 6, 7].map((num) => {
-              const isDisabled = num > ride.availableSeats;
-              const isSelected = num === seatsToBook;
-              return (
-                <TouchableOpacity
-                  key={num}
+          <View style={styles.detailRow}>
+            <IconSymbol
+              ios_icon_name="dollarsign.circle.fill"
+              android_material_icon_name="payment"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.detailLabel}>Price per Seat</Text>
+            <Text style={styles.detailValue}>${ride.pricePerSeat.toFixed(2)}</Text>
+          </View>
+
+          {ride.ladiesOnly && (
+            <View style={styles.badgeRow}>
+              <View style={styles.badge}>
+                <IconSymbol
+                  ios_icon_name="person.fill"
+                  android_material_icon_name="person"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.badgeText}>Ladies Only</Text>
+              </View>
+            </View>
+          )}
+
+          {ride.acceptsParcels && (
+            <View style={styles.badgeRow}>
+              <View style={styles.badge}>
+                <IconSymbol
+                  ios_icon_name="shippingbox.fill"
+                  android_material_icon_name="local-shipping"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.badgeText}>Accepts Parcels</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.safetyCard}>
+          <Text style={styles.safetyTitle}>Safety Features</Text>
+          
+          <TouchableOpacity style={styles.safetyButton} onPress={handleShareRide}>
+            <IconSymbol
+              ios_icon_name="location.circle.fill"
+              android_material_icon_name="location-on"
+              size={24}
+              color={colors.primary}
+            />
+            <View style={styles.safetyButtonText}>
+              <Text style={styles.safetyButtonTitle}>Share My Ride</Text>
+              <Text style={styles.safetyButtonSubtitle}>Let friends track your journey</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.sosContainer}>
+            <SOSButton rideId={id} style={styles.sosButton} />
+            <Text style={styles.sosText}>Emergency SOS</Text>
+          </View>
+
+          <TouchableOpacity style={styles.reportButton} onPress={handleReportUser}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.shield.fill"
+              android_material_icon_name="report"
+              size={20}
+              color={colors.error}
+            />
+            <Text style={styles.reportButtonText}>Report Driver</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.seatSelector}>
+          <Text style={styles.seatSelectorLabel}>Select Seats</Text>
+          <View style={styles.seatButtons}>
+            {[1, 2, 3, 4].map((num) => (
+              <TouchableOpacity
+                key={num}
+                style={[
+                  styles.seatButton,
+                  selectedSeats === num && styles.seatButtonSelected,
+                  num > ride.availableSeats && styles.seatButtonDisabled,
+                ]}
+                onPress={() => setSelectedSeats(num)}
+                disabled={num > ride.availableSeats}
+              >
+                <Text
                   style={[
-                    styles.seatButton,
-                    isSelected && styles.seatButtonSelected,
-                    isDisabled && styles.seatButtonDisabled,
-                  ]}
-                  onPress={() => !isDisabled && setSeatsToBook(num)}
-                  disabled={isDisabled}
-                >
-                  <Text style={[
                     styles.seatButtonText,
-                    isSelected && styles.seatButtonTextSelected,
-                    isDisabled && styles.seatButtonTextDisabled,
-                  ]}>
-                    {num}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Price</Text>
-            <Text style={styles.totalPrice}>{totalPriceText}</Text>
+                    selectedSeats === num && styles.seatButtonTextSelected,
+                    num > ride.availableSeats && styles.seatButtonTextDisabled,
+                  ]}
+                >
+                  {num}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        {(ride.instantBook || ride.ladiesOnly || ride.acceptsParcels) && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Features</Text>
-            <View style={styles.features}>
-              {ride.instantBook && (
-                <View style={styles.feature}>
-                  <IconSymbol ios_icon_name="bolt.fill" android_material_icon_name="flash-on" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Instant Booking</Text>
-                </View>
-              )}
-              {ride.ladiesOnly && (
-                <View style={styles.feature}>
-                  <IconSymbol ios_icon_name="person.2.fill" android_material_icon_name="group" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Ladies Only</Text>
-                </View>
-              )}
-              {ride.acceptsParcels && (
-                <View style={styles.feature}>
-                  <IconSymbol ios_icon_name="shippingbox.fill" android_material_icon_name="local-shipping" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Accepts Parcels</Text>
-                </View>
-              )}
-            </View>
+        <View style={styles.priceCard}>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>Total Price</Text>
+            <Text style={styles.priceValue}>{formattedTotalPrice}</Text>
           </View>
-        )}
-
-        <View style={styles.buttonContainer}>
-          <Button
-            title={booking ? 'Booking...' : 'Book Ride'}
-            onPress={handleBookRide}
-            disabled={booking || ride.availableSeats === 0}
-          />
+          <Text style={styles.priceSubtext}>
+            {selectedSeats} seat{selectedSeats > 1 ? 's' : ''} × ${ride.pricePerSeat.toFixed(2)}
+          </Text>
         </View>
       </ScrollView>
 
-      <CustomModal
-        visible={errorModal.visible}
-        title="Error"
-        message={errorModal.message}
-        type="error"
-        buttons={[{ text: 'OK', onPress: () => setErrorModal({ visible: false, message: '' }) }]}
-        onClose={() => setErrorModal({ visible: false, message: '' })}
-      />
+      <View style={styles.footer}>
+        <Button
+          title={isBooking ? 'Booking...' : 'Book Now'}
+          onPress={handleBookRide}
+          disabled={isBooking || ride.availableSeats === 0}
+          style={styles.bookButton}
+        />
+      </View>
 
       <CustomModal
-        visible={successModal.visible}
-        title="Booking Successful!"
-        message={`${successModal.message}\n\nBooking Code: ${successModal.bookingCode}`}
-        type="success"
-        buttons={[{ text: 'View Bookings', onPress: () => router.push('/bookings/my-bookings') }]}
-        onClose={() => setSuccessModal({ visible: false, message: '', bookingCode: '' })}
+        isVisible={modalVisible}
+        title={modalTitle}
+        message={modalMessage}
+        onConfirm={() => setModalVisible(false)}
+        confirmText="OK"
       />
     </SafeAreaView>
   );
@@ -316,36 +390,108 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
     fontSize: 16,
     color: colors.textSecondary,
+    marginTop: 12,
   },
-  emptyContainer: {
+  errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 32,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
+  errorText: {
+    fontSize: 18,
+    color: colors.error,
     marginTop: 16,
     marginBottom: 24,
   },
-  scrollView: {
+  backButton: {
+    paddingHorizontal: 32,
+  },
+  routeCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  routePoint: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 16,
+  originDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+    marginBottom: 8,
   },
-  card: {
+  destinationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.success,
+    marginBottom: 8,
+  },
+  routeLine: {
+    width: 2,
+    backgroundColor: colors.border,
+    marginHorizontal: 16,
+  },
+  routeLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  routeCity: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  routeTime: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  routeDate: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  viaPointsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  viaPointsLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  viaPointsText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  driverCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
@@ -353,210 +499,238 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  routeContainer: {
-    paddingVertical: 8,
-  },
-  routePoint: {
+  driverHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  routeCity: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginLeft: 12,
-  },
-  viaPoint: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginLeft: 12,
-  },
-  routeLine: {
-    width: 2,
-    height: 32,
-    backgroundColor: colors.border,
-    marginLeft: 7,
-    marginVertical: 4,
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  scheduleItem: {
-    flex: 1,
-  },
-  scheduleLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  scheduleTime: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  scheduleDate: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  driverInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginBottom: 12,
   },
   driverAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
-  driverDetails: {
+  driverInfo: {
     flex: 1,
   },
-  driverName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
+  driverNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 4,
   },
-  driverCity: {
+  driverName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  ratingCount: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 8,
   },
   vehicleInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  vehicleDetails: {
-    marginLeft: 16,
-    flex: 1,
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   vehicleText: {
-    fontSize: 18,
+    fontSize: 14,
+    color: colors.text,
+  },
+  detailsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: colors.text,
+    marginLeft: 8,
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
   },
-  vehicleSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  pricingRow: {
+  badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  badge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    backgroundColor: colors.primary + '10',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    gap: 6,
   },
-  priceLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  price: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.primary,
   },
-  seatsLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'right',
+  safetyCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  seatsText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.text,
-    textAlign: 'right',
-  },
-  seatsSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-  selectSeatsLabel: {
+  safetyTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 12,
   },
-  seatsSelector: {
+  safetyButton: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  safetyButtonText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  safetyButtonTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  safetyButtonSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  sosContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sosButton: {
+    marginBottom: 8,
+  },
+  sosText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error + '10',
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  reportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.error,
+  },
+  seatSelector: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  seatSelectorLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  seatButtons: {
+    flexDirection: 'row',
     gap: 12,
-    marginBottom: 24,
   },
   seatButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
     backgroundColor: colors.background,
+    alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   seatButtonSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primary + '10',
     borderColor: colors.primary,
   },
   seatButtonDisabled: {
-    opacity: 0.3,
+    opacity: 0.4,
   },
   seatButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
   seatButtonTextSelected: {
-    color: '#fff',
+    color: colors.primary,
   },
   seatButtonTextDisabled: {
     color: colors.textSecondary,
   },
-  totalRow: {
+  priceCard: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginBottom: 4,
   },
-  totalLabel: {
-    fontSize: 18,
+  priceLabel: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
-  totalPrice: {
-    fontSize: 28,
+  priceValue: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: colors.primary,
   },
-  features: {
-    gap: 12,
+  priceSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
-  feature: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  featureText: {
-    fontSize: 16,
-    color: colors.text,
-    marginLeft: 12,
-  },
-  buttonContainer: {
-    marginTop: 8,
-    marginBottom: 32,
+  bookButton: {
+    width: '100%',
   },
 });
