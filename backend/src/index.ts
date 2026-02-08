@@ -11,6 +11,11 @@ import { register as registerRatingsRoutes } from './routes/ratings.js';
 import { register as registerReportsRoutes } from './routes/reports.js';
 import { register as registerSafetyRoutes } from './routes/safety.js';
 import { register as registerAdminRoutes } from './routes/admin.js';
+import { register as registerAdminDashboardRoutes } from './routes/admin-dashboard.js';
+import { register as registerAdminUsersRoutes } from './routes/admin-users.js';
+import { register as registerAdminRidesRoutes } from './routes/admin-rides.js';
+import { register as registerAdminConfigRoutes } from './routes/admin-config.js';
+import { register as registerAdminModerationRoutes } from './routes/admin-moderation.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -35,6 +40,11 @@ registerRatingsRoutes(app, app.fastify);
 registerReportsRoutes(app, app.fastify);
 registerSafetyRoutes(app, app.fastify);
 registerAdminRoutes(app, app.fastify);
+registerAdminDashboardRoutes(app, app.fastify);
+registerAdminUsersRoutes(app, app.fastify);
+registerAdminRidesRoutes(app, app.fastify);
+registerAdminConfigRoutes(app, app.fastify);
+registerAdminModerationRoutes(app, app.fastify);
 
 await app.run();
-app.logger.info('Application running with phone authentication, ride-sharing, and trust & safety features');
+app.logger.info('Application running with phone authentication, ride-sharing, trust & safety, and admin features');

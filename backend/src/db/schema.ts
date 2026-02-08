@@ -12,6 +12,10 @@ export const users = pgTable('users', {
   userType: text('user_type', { enum: ['Passenger', 'Driver'] }),
   homeCity: text('home_city'),
   verificationLevel: text('verification_level', { enum: ['PhoneVerified', 'IDUploaded', 'FullyVerified'] }).notNull().default('PhoneVerified'),
+  role: text('role', { enum: ['user', 'admin', 'super_admin'] }).notNull().default('user'),
+  walletBalance: numeric('wallet_balance', { precision: 10, scale: 2 }).notNull().default('0'),
+  isBanned: boolean('is_banned').notNull().default(false),
+  banReason: text('ban_reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -152,4 +156,60 @@ export const sosAlerts = pgTable('sos_alerts', {
   status: text('status', { enum: ['active', 'resolved'] }).notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+});
+
+/**
+ * Admin audit logs table
+ */
+export const adminAuditLogs = pgTable('admin_audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminId: uuid('admin_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  details: jsonb('details'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Promo codes table
+ */
+export const promoCodes = pgTable('promo_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(),
+  discountType: text('discount_type', { enum: ['percentage', 'fixed'] }).notNull(),
+  discountValue: numeric('discount_value', { precision: 10, scale: 2 }).notNull(),
+  maxUses: integer('max_uses'),
+  currentUses: integer('current_uses').notNull().default(0),
+  validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
+  validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Pricing templates table
+ */
+export const pricingTemplates = pgTable('pricing_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  basePrice: numeric('base_price', { precision: 10, scale: 2 }).notNull(),
+  pricePerKm: numeric('price_per_km', { precision: 10, scale: 2 }).notNull(),
+  commissionRate: numeric('commission_rate', { precision: 5, scale: 2 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Routes configuration table
+ */
+export const routesConfig = pgTable('routes_config', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  origin: text('origin').notNull(),
+  destination: text('destination').notNull(),
+  distanceKm: numeric('distance_km', { precision: 10, scale: 2 }).notNull(),
+  estimatedDurationMinutes: integer('estimated_duration_minutes').notNull(),
+  suggestedPrice: numeric('suggested_price', { precision: 10, scale: 2 }).notNull(),
+  isPopular: boolean('is_popular').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
