@@ -30,10 +30,16 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const [navigationReady, setNavigationReady] = React.useState(false);
+
+  // Mark navigation as ready after initial mount
+  useEffect(() => {
+    setNavigationReady(true);
+  }, []);
 
   useEffect(() => {
-    if (isLoading) {
-      // Still loading auth state, don't navigate yet
+    // Don't navigate until both auth is loaded AND navigation is ready
+    if (isLoading || !navigationReady) {
       return;
     }
 
@@ -61,7 +67,7 @@ function RootLayoutNav() {
         router.replace('/(tabs)/(home)');
       }
     }
-  }, [isLoading, isAuthenticated, segments, user, router]);
+  }, [isLoading, isAuthenticated, segments, user, router, navigationReady]);
 
   // Show loading screen while checking auth
   if (isLoading) {
