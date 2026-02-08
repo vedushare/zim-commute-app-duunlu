@@ -9,7 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
-} from 'react';
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
