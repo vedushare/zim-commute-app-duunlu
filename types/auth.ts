@@ -8,6 +8,10 @@ export interface User {
   userType?: 'Passenger' | 'Driver';
   homeCity?: string;
   verificationLevel: 'PhoneVerified' | 'IDUploaded' | 'FullyVerified';
+  role?: 'user' | 'admin' | 'super_admin';
+  walletBalance?: number;
+  isBanned?: boolean;
+  banReason?: string;
   createdAt: string;
 }
 

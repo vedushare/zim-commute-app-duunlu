@@ -151,6 +151,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userType: (updatedUser.userType as 'Passenger' | 'Driver') || undefined,
         homeCity: updatedUser.homeCity || undefined,
         verificationLevel: updatedUser.verificationLevel as 'PhoneVerified' | 'IDUploaded' | 'FullyVerified',
+        role: (updatedUser as any).role as 'user' | 'admin' | 'super_admin' || 'user',
+        walletBalance: (updatedUser as any).walletBalance || 0,
+        isBanned: (updatedUser as any).isBanned || false,
+        banReason: (updatedUser as any).banReason || undefined,
         createdAt: updatedUser.createdAt,
       };
       

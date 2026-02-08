@@ -83,6 +83,10 @@ export default function VerifyOTPScreen() {
         userType: (response.user.userType as 'Passenger' | 'Driver') || undefined,
         homeCity: response.user.homeCity || undefined,
         verificationLevel: response.user.verificationLevel as 'PhoneVerified' | 'IDUploaded' | 'FullyVerified',
+        role: (response.user.role as 'user' | 'admin' | 'super_admin') || 'user',
+        walletBalance: response.user.walletBalance || 0,
+        isBanned: response.user.isBanned || false,
+        banReason: response.user.banReason || undefined,
         createdAt: response.user.createdAt,
       };
       

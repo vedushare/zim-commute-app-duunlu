@@ -64,6 +64,11 @@ export default function ProfileScreen() {
     // TODO: Implement my reports screen
   };
 
+  const handleAdminDashboard = () => {
+    console.log('[Profile] User tapped Admin Dashboard');
+    router.push('/admin/dashboard');
+  };
+
   const handleLogout = async () => {
     console.log('[Profile] User confirmed logout');
     setShowLogoutModal(false);
@@ -254,6 +259,33 @@ export default function ProfileScreen() {
             />
           </TouchableOpacity>
         </View>
+
+        {/* Admin Section - Only show for admin users */}
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Administration</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={handleAdminDashboard}>
+              <View style={styles.menuItemLeft}>
+                <IconSymbol
+                  ios_icon_name="shield.lefthalf.filled"
+                  android_material_icon_name="admin-panel-settings"
+                  size={24}
+                  color={colors.primary}
+                />
+                <View>
+                  <Text style={styles.menuItemText}>Admin Dashboard</Text>
+                  <Text style={styles.menuItemSubtext}>Manage users, rides, and system settings</Text>
+                </View>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="arrow-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>

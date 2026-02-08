@@ -260,6 +260,10 @@ export interface VerifyOTPResponse {
     userType: string | null;
     homeCity: string | null;
     verificationLevel: string;
+    role?: string;
+    walletBalance?: number;
+    isBanned?: boolean;
+    banReason?: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -274,6 +278,10 @@ export interface UserProfile {
   userType: string | null;
   homeCity: string | null;
   verificationLevel: string;
+  role?: string;
+  walletBalance?: number;
+  isBanned?: boolean;
+  banReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
