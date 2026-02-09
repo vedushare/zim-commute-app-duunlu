@@ -15,13 +15,19 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { ZIMBABWE_CITIES } from '@/constants/zimbabwe';
-import { searchRides } from '@/utils/ridesApi';
+import { searchRides as searchRidesOnline } from '@/utils/ridesApi';
+import { searchRides as searchRidesOffline } from '@/utils/offlineApi';
+import { useConnectivity } from '@/utils/connectivityManager';
 import { Ride } from '@/types/rides';
 import { VerificationBadge } from '@/components/auth/VerificationBadge';
 import Button from '@/components/button';
+import { OfflineIndicator } from '@/components/offline/OfflineIndicator';
+import { SyncStatusIndicator } from '@/components/offline/SyncStatusIndicator';
+import { CachedDataWarning } from '@/components/offline/CachedDataWarning';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { isOnline } = useConnectivity();
   
   const [loading, setLoading] = useState(false);
   const [origin, setOrigin] = useState('');
@@ -39,6 +45,7 @@ export default function HomeScreen() {
   
   const [rides, setRides] = useState<Ride[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [showingCachedData, setShowingCachedData] = useState(false);
 
   const handleSearch = async () => {
     if (!origin || !destination) {
@@ -49,7 +56,7 @@ export default function HomeScreen() {
       setLoading(true);
       console.log('Searching rides:', origin, destination, date.toISOString().split('T')[0]);
       
-      const results = await searchRides({
+      const searchParams = {
         origin,
         destination,
         date: date.toISOString().split('T')[0],
@@ -57,14 +64,23 @@ export default function HomeScreen() {
         maxPrice,
         ladiesOnly: ladiesOnly || undefined,
         verifiedDriversOnly: verifiedDriversOnly || undefined,
-      });
+      };
+
+      // Use offline-first API
+      const { data: results, fromCache } = await searchRidesOffline(searchParams);
 
       setRides(results);
       setHasSearched(true);
+      setShowingCachedData(fromCache);
+      
+      if (fromCache) {
+        console.log('Showing cached ride results');
+      }
     } catch (error: any) {
       console.error('Failed to search rides:', error);
       setRides([]);
       setHasSearched(true);
+      setShowingCachedData(false);
     } finally {
       setLoading(false);
     }
@@ -93,11 +109,15 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <OfflineIndicator />
+      
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Find a Ride</Text>
           <Text style={styles.subtitle}>Search for available rides in Zimbabwe</Text>
         </View>
+
+        <SyncStatusIndicator />
 
         <View style={styles.searchCard}>
           <Text style={styles.label}>From</Text>
@@ -215,6 +235,13 @@ export default function HomeScreen() {
             disabled={loading || !origin || !destination}
           />
         </View>
+
+        {showingCachedData && (
+          <CachedDataWarning 
+            message="Showing cached results. Connect to internet for latest rides."
+            type="warning"
+          />
+        )}
 
         {loading && (
           <View style={styles.loadingContainer}>

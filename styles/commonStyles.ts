@@ -23,6 +23,14 @@ export const colors = {
   danger: '#DC2626', // Darker red for destructive actions
   warning: '#F59E0B',
   info: '#3B82F6',
+  
+  // Additional UI colors
+  surface: '#FFFFFF',
+  primaryLight: '#E6F7EF',
+  warningLight: '#FEF3C7',
+  errorLight: '#FEE2E2',
+  infoLight: '#DBEAFE',
+  successLight: '#D1FAE5',
 };
 
 export const commonStyles = StyleSheet.create({

@@ -223,6 +223,27 @@ export default function ProfileScreen() {
             />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/offline/pending-operations')}>
+            <View style={styles.menuItemLeft}>
+              <IconSymbol
+                ios_icon_name="arrow.clockwise.circle.fill"
+                android_material_icon_name="sync"
+                size={24}
+                color={colors.info}
+              />
+              <View>
+                <Text style={styles.menuItemText}>Pending Operations</Text>
+                <Text style={styles.menuItemSubtext}>View queued changes</Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={handleMyRatings}>
             <View style={styles.menuItemLeft}>
               <IconSymbol

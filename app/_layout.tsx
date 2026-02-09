@@ -14,9 +14,10 @@ import { SystemBars } from "react-native-edge-to-edge";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useFonts } from "expo-font";
 import { useColorScheme, View, ActivityIndicator } from "react-native";
-import { useNetworkState } from "expo-network";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colors } from "@/styles/commonStyles";
+import { initializeConnectivityMonitoring } from "@/utils/connectivityManager";
+import { initializeSyncManager } from "@/utils/syncManager";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -36,6 +37,28 @@ function RootLayoutNav() {
   useEffect(() => {
     setNavigationReady(true);
   }, []);
+
+  // Initialize offline-first system
+  useEffect(() => {
+    console.log('[RootLayout] Initializing offline-first system');
+    
+    const initializeOfflineSystem = async () => {
+      try {
+        await initializeConnectivityMonitoring();
+        console.log('[RootLayout] Connectivity monitoring initialized');
+        
+        // Only initialize sync manager if user is authenticated
+        if (isAuthenticated) {
+          await initializeSyncManager();
+          console.log('[RootLayout] Sync manager initialized');
+        }
+      } catch (error) {
+        console.error('[RootLayout] Error initializing offline system:', error);
+      }
+    };
+
+    initializeOfflineSystem();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     // Don't navigate until both auth is loaded AND navigation is ready
@@ -86,6 +109,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/phone-login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/verify-otp" options={{ headerShown: false }} />
         <Stack.Screen name="auth/profile-setup" options={{ headerShown: false }} />
+        <Stack.Screen name="offline/pending-operations" options={{ headerShown: true, title: 'Pending Operations' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
@@ -94,8 +118,6 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const { isConnected } = useNetworkState();
-
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
