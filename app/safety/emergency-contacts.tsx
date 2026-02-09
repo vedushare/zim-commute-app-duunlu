@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -50,11 +50,7 @@ export default function EmergencyContactsScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getEmergencyContacts();
@@ -66,7 +62,11 @@ export default function EmergencyContactsScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   const showModal = (title: string, message: string) => {
     setModalTitle(title);

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -33,11 +33,7 @@ export default function AdminSOSAlertsScreen() {
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
 
-  useEffect(() => {
-    loadAlerts();
-  }, [statusFilter]);
-
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     console.log('Loading SOS alerts');
     try {
       const response = await getSOSAlerts(statusFilter);
@@ -49,7 +45,11 @@ export default function AdminSOSAlertsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
 
   const handleRefresh = () => {
     setRefreshing(true);

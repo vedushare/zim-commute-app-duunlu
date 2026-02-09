@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -44,11 +44,7 @@ export default function VerificationQueueScreen() {
   const [selectedDocument, setSelectedDocument] = useState<VerificationDocument | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  useEffect(() => {
-    loadDocuments();
-  }, [page, statusFilter]);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     console.log('Loading verification documents');
     try {
       const response = await getVerificationQueue({
@@ -65,7 +61,11 @@ export default function VerificationQueueScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [page, statusFilter]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
 
   const handleRefresh = () => {
     setRefreshing(true);

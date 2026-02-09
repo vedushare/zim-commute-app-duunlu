@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -42,11 +42,7 @@ export default function AdminUsersScreen() {
   const [walletReason, setWalletReason] = useState('');
   const [actionType, setActionType] = useState<'ban' | 'unban' | 'wallet' | null>(null);
 
-  useEffect(() => {
-    loadUsers();
-  }, [page, roleFilter, statusFilter]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     console.log('Loading admin users');
     try {
       const response = await getAdminUsers({
@@ -65,7 +61,11 @@ export default function AdminUsersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [page, roleFilter, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const handleRefresh = () => {
     setRefreshing(true);

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -54,17 +54,7 @@ export default function PostRideScreen() {
   const [errorModal, setErrorModal] = useState({ visible: false, message: '' });
   const [successModal, setSuccessModal] = useState({ visible: false, message: '' });
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
-
-  useEffect(() => {
-    if (origin && destination && origin !== destination) {
-      autoCalculatePrice();
-    }
-  }, [origin, destination]); // autoCalculatePrice is stable, no need to include
-
-  const loadVehicles = async () => {
+  const loadVehicles = useCallback(async () => {
     try {
       setLoadingVehicles(true);
       const data = await getVehicles();
@@ -78,9 +68,11 @@ export default function PostRideScreen() {
     } finally {
       setLoadingVehicles(false);
     }
-  };
+  }, []);
 
-  const autoCalculatePrice = async () => {
+  const autoCalculatePrice = useCallback(async () => {
+    if (!origin || !destination || origin === destination) return;
+    
     try {
       setCalculatingPrice(true);
       const result = await calculatePrice(origin, destination);
@@ -93,7 +85,15 @@ export default function PostRideScreen() {
     } finally {
       setCalculatingPrice(false);
     }
-  };
+  }, [origin, destination]);
+
+  useEffect(() => {
+    loadVehicles();
+  }, [loadVehicles]);
+
+  useEffect(() => {
+    autoCalculatePrice();
+  }, [autoCalculatePrice]);
 
   const handleAddViaPoint = () => {
     if (viaPoints.length < 3) {

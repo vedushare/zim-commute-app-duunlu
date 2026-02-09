@@ -1,7 +1,7 @@
 
 import { colors } from '@/styles/commonStyles';
 import { VerificationBadge } from '@/components/auth/VerificationBadge';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '@/components/button';
 import { CustomModal } from '@/components/ui/CustomModal';
@@ -30,13 +30,9 @@ export default function RideDetailsScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
 
-  useEffect(() => {
-    if (id) {
-      loadRideDetails();
-    }
-  }, [id]);
-
-  const loadRideDetails = async () => {
+  const loadRideDetails = useCallback(async () => {
+    if (!id) return;
+    
     setIsLoading(true);
     try {
       const data = await getRideDetails(id);
@@ -48,7 +44,11 @@ export default function RideDetailsScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadRideDetails();
+  }, [loadRideDetails]);
 
   const showModal = (title: string, message: string) => {
     setModalTitle(title);
@@ -57,7 +57,7 @@ export default function RideDetailsScreen() {
   };
 
   const handleBookRide = async () => {
-    if (!ride) return;
+    if (!ride || !id) return;
 
     if (selectedSeats > ride.availableSeats) {
       showModal('Error', 'Not enough seats available');
@@ -91,12 +91,13 @@ export default function RideDetailsScreen() {
   };
 
   const handleShareRide = () => {
+    if (!id) return;
     console.log('[RideDetails] User tapped Share My Ride');
     router.push(`/safety/share-ride/${id}`);
   };
 
   const handleReportUser = () => {
-    if (!ride?.driver) return;
+    if (!ride?.driver || !id) return;
     console.log('[RideDetails] User tapped Report Driver');
     router.push({
       pathname: '/safety/report-user',
@@ -140,7 +141,7 @@ export default function RideDetailsScreen() {
     );
   }
 
-  if (!ride) {
+  if (!ride || !id) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: 'Ride Details', headerShown: true }} />

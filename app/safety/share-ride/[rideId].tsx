@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -28,19 +28,15 @@ export default function ShareRideScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
 
-  useEffect(() => {
-    if (rideId) {
-      generateLink();
-    }
-  }, [rideId]);
-
   const showModal = (title: string, message: string) => {
     setModalTitle(title);
     setModalMessage(message);
     setModalVisible(true);
   };
 
-  const generateLink = async () => {
+  const generateLink = useCallback(async () => {
+    if (!rideId) return;
+    
     setIsLoading(true);
     console.log('[ShareRide] Generating share link for ride:', rideId);
     
@@ -54,7 +50,11 @@ export default function ShareRideScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [rideId]);
+
+  useEffect(() => {
+    generateLink();
+  }, [generateLink]);
 
   const handleShareWhatsApp = async () => {
     if (!shareData) return;
