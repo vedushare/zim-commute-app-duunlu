@@ -15,7 +15,7 @@ export interface ConnectivityState {
   type: Network.NetworkStateType;
 }
 
-let connectivityListeners: Array<(state: ConnectivityState) => void> = [];
+let connectivityListeners: ((state: ConnectivityState) => void)[] = [];
 let currentState: ConnectivityState = {
   isConnected: false,
   isInternetReachable: null,

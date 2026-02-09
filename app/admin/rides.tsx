@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -29,11 +29,7 @@ export default function AdminRidesScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
 
-  useEffect(() => {
-    loadRides();
-  }, [page, statusFilter]);
-
-  const loadRides = async () => {
+  const loadRides = useCallback(async () => {
     console.log('Loading admin rides');
     try {
       const response = await getAdminRides({
@@ -50,7 +46,11 @@ export default function AdminRidesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [page, statusFilter]);
+
+  useEffect(() => {
+    loadRides();
+  }, [loadRides]);
 
   const handleRefresh = () => {
     setRefreshing(true);

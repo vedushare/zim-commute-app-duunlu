@@ -1,748 +1,539 @@
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { colors } from '@/styles/commonStyles';
-import { useAuth } from '@/contexts/AuthContext';
-import { ZIMBABWE_CITIES } from '@/constants/zimbabwe';
 import { IconSymbol } from '@/components/IconSymbol';
-import { VerificationBadge } from '@/components/auth/VerificationBadge';
-import Button from '@/components/button';
-import { updateProfile, uploadProfilePhoto } from '@/utils/api';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ZIMBABWE_CITIES } from '@/constants/zimbabwe';
+import { Stack, useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { CustomModal } from '@/components/ui/CustomModal';
+import { VerificationBadge } from '@/components/auth/VerificationBadge';
+import { colors } from '@/styles/commonStyles';
+import React, { useState } from 'react';
+import Button from '@/components/button';
 import { User } from '@/types/auth';
+import { updateProfile, uploadProfilePhoto } from '@/utils/api';
+import { compressProfilePhoto } from '@/utils/imageCompression';
+import { performanceMonitor } from '@/utils/performanceMonitor';
+import * as ImagePicker from 'expo-image-picker';
+import { OptimizedImage } from '@/components/optimized/OptimizedImage';
+import { FadeInView } from '@/components/animations/FadeInView';
 
-type ProfileStep = 1 | 2 | 3 | 4;
-
-export default function ProfileSetupScreen() {
-  const router = useRouter();
-  const { user, updateUser } = useAuth();
-  
-  const [currentStep, setCurrentStep] = useState<ProfileStep>(1);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
-  const [userType, setUserType] = useState<'Passenger' | 'Driver' | null>(null);
-  const [homeCity, setHomeCity] = useState('');
-  const [showCityPicker, setShowCityPicker] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const handleNext = async () => {
-    console.log('User tapped Next on step:', currentStep);
-    
-    if (currentStep < 4) {
-      setCurrentStep((currentStep + 1) as ProfileStep);
-    } else {
-      await handleComplete();
-    }
-  };
-
-  const handleSkip = () => {
-    console.log('User tapped Skip on step:', currentStep);
-    
-    if (currentStep < 4) {
-      setCurrentStep((currentStep + 1) as ProfileStep);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handleComplete = async () => {
-    console.log('[ProfileSetup] User completing profile setup');
-    setIsLoading(true);
-
-    try {
-      // Prepare profile data (only include fields that have values)
-      const profileData: any = {};
-      if (fullName) profileData.fullName = fullName;
-      if (email) profileData.email = email;
-      if (userType) profileData.userType = userType;
-      if (homeCity) profileData.homeCity = homeCity;
-
-      console.log('[ProfileSetup] Updating profile with data:', profileData);
-      
-      // Update profile on backend
-      const updatedUser = await updateProfile(profileData);
-      
-      console.log('[ProfileSetup] Profile updated successfully:', updatedUser);
-      
-      // Convert backend user to our User type
-      const user: User = {
-        id: updatedUser.id,
-        phoneNumber: updatedUser.phoneNumber,
-        fullName: updatedUser.fullName || undefined,
-        email: updatedUser.email || undefined,
-        profilePhotoUrl: updatedUser.profilePhotoUrl || undefined,
-        userType: (updatedUser.userType as 'Passenger' | 'Driver') || undefined,
-        homeCity: updatedUser.homeCity || undefined,
-        verificationLevel: updatedUser.verificationLevel as 'PhoneVerified' | 'IDUploaded' | 'FullyVerified',
-        createdAt: updatedUser.createdAt,
-      };
-      
-      // Update local user state
-      updateUser(user);
-      
-      console.log('[ProfileSetup] Profile setup complete, navigating to home');
-      router.replace('/(tabs)/(home)');
-    } catch (err: any) {
-      console.error('[ProfileSetup] Error completing profile setup:', err);
-      const message = err.message || 'Failed to update profile. Please try again.';
-      setErrorMessage(message);
-      setShowErrorModal(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handlePickImage = async () => {
-    console.log('[ProfileSetup] User tapped to pick profile photo');
-    
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (!permissionResult.granted) {
-      console.log('[ProfileSetup] Media library permission denied');
-      setErrorMessage('Permission to access photos was denied');
-      setShowErrorModal(true);
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      console.log('[ProfileSetup] Image selected:', asset.uri);
-      setProfilePhoto(asset.uri);
-      
-      // Upload photo to backend
-      await uploadPhoto(asset.uri);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    console.log('[ProfileSetup] User tapped to take photo');
-    
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (!permissionResult.granted) {
-      console.log('[ProfileSetup] Camera permission denied');
-      setErrorMessage('Permission to access camera was denied');
-      setShowErrorModal(true);
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      console.log('[ProfileSetup] Photo taken:', asset.uri);
-      setProfilePhoto(asset.uri);
-      
-      // Upload photo to backend
-      await uploadPhoto(asset.uri);
-    }
-  };
-
-  const uploadPhoto = async (uri: string) => {
-    setIsUploadingPhoto(true);
-    console.log('[ProfileSetup] Uploading photo to backend');
-
-    try {
-      // Extract filename from URI
-      const filename = uri.split('/').pop() || 'profile-photo.jpg';
-      
-      // Determine MIME type
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-      const response = await uploadProfilePhoto({
-        uri,
-        name: filename,
-        type,
-      });
-
-      console.log('[ProfileSetup] Photo uploaded successfully:', response.profilePhotoUrl);
-      setProfilePhotoUrl(response.profilePhotoUrl);
-      
-      // Update user with new photo URL
-      if (user) {
-        updateUser({
-          ...user,
-          profilePhotoUrl: response.profilePhotoUrl,
-        });
-      }
-    } catch (err: any) {
-      console.error('[ProfileSetup] Error uploading photo:', err);
-      const message = err.message || 'Failed to upload photo. Please try again.';
-      setErrorMessage(message);
-      setShowErrorModal(true);
-      // Clear the local photo on error
-      setProfilePhoto(null);
-    } finally {
-      setIsUploadingPhoto(false);
-    }
-  };
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>What&apos;s your name?</Text>
-            <Text style={styles.stepSubtitle}>
-              Help others recognize you on ZimCommute
-            </Text>
-            
-            <TextInput
-              style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Full Name"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-              autoFocus
-            />
-            
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email (optional)"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-        );
-      
-      case 2:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Add a profile photo</Text>
-            <Text style={styles.stepSubtitle}>
-              A photo helps build trust with other users
-            </Text>
-            
-            <View style={styles.photoContainer}>
-              {isUploadingPhoto ? (
-                <View style={styles.photoPreview}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={styles.photoText}>Uploading...</Text>
-                </View>
-              ) : profilePhoto ? (
-                <View style={styles.photoPreview}>
-                  <Text style={styles.photoPlaceholder}>📷</Text>
-                  <Text style={styles.photoText}>Photo uploaded</Text>
-                </View>
-              ) : (
-                <View style={styles.photoPlaceholderContainer}>
-                  <IconSymbol
-                    ios_icon_name="person.circle"
-                    android_material_icon_name="account-circle"
-                    size={80}
-                    color={colors.textSecondary}
-                  />
-                </View>
-              )}
-            </View>
-            
-            <View style={styles.photoButtons}>
-              <TouchableOpacity
-                style={styles.photoButton}
-                onPress={handleTakePhoto}
-                disabled={isUploadingPhoto}
-              >
-                <IconSymbol
-                  ios_icon_name="camera"
-                  android_material_icon_name="camera"
-                  size={24}
-                  color={isUploadingPhoto ? colors.textSecondary : colors.primary}
-                />
-                <Text style={[styles.photoButtonText, isUploadingPhoto && { color: colors.textSecondary }]}>
-                  Take Photo
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.photoButton}
-                onPress={handlePickImage}
-                disabled={isUploadingPhoto}
-              >
-                <IconSymbol
-                  ios_icon_name="photo"
-                  android_material_icon_name="photo"
-                  size={24}
-                  color={isUploadingPhoto ? colors.textSecondary : colors.primary}
-                />
-                <Text style={[styles.photoButtonText, isUploadingPhoto && { color: colors.textSecondary }]}>
-                  Choose from Gallery
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      
-      case 3:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>How will you use ZimCommute?</Text>
-            <Text style={styles.stepSubtitle}>
-              You can change this later in settings
-            </Text>
-            
-            <View style={styles.userTypeContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.userTypeCard,
-                  userType === 'Passenger' && styles.userTypeCardSelected,
-                ]}
-                onPress={() => setUserType('Passenger')}
-              >
-                <Text style={styles.userTypeIcon}>🚗</Text>
-                <Text style={styles.userTypeTitle}>Passenger</Text>
-                <Text style={styles.userTypeDescription}>
-                  Find rides to your destination
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.userTypeCard,
-                  userType === 'Driver' && styles.userTypeCardSelected,
-                ]}
-                onPress={() => setUserType('Driver')}
-              >
-                <Text style={styles.userTypeIcon}>🚙</Text>
-                <Text style={styles.userTypeTitle}>Driver</Text>
-                <Text style={styles.userTypeDescription}>
-                  Offer rides and earn money
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      
-      case 4:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Where are you based?</Text>
-            <Text style={styles.stepSubtitle}>
-              We&apos;ll show you relevant rides in your area
-            </Text>
-            
-            <TouchableOpacity
-              style={styles.citySelector}
-              onPress={() => setShowCityPicker(true)}
-            >
-              <Text style={[styles.citySelectorText, !homeCity && styles.citySelectorPlaceholder]}>
-                {homeCity || 'Select your city'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.down"
-                android_material_icon_name="arrow-drop-down"
-                size={24}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-            
-            <View style={styles.verificationInfo}>
-              <Text style={styles.verificationTitle}>Your Verification Status</Text>
-              {user && (
-                <VerificationBadge level={user.verificationLevel} size="large" />
-              )}
-              <Text style={styles.verificationText}>
-                Complete ID verification to unlock all features
-              </Text>
-            </View>
-          </View>
-        );
-    }
-  };
-
-  const canProceed = () => {
-    switch (currentStep) {
-      case 1:
-        return fullName.length > 0;
-      case 2:
-        return true; // Photo is optional
-      case 3:
-        return userType !== null;
-      case 4:
-        return homeCity.length > 0;
-      default:
-        return false;
-    }
-  };
-
-  return (
-    <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Complete Your Profile',
-          headerBackVisible: false,
-        }}
-      />
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.progressContainer}>
-          {[1, 2, 3, 4].map(step => {
-            const isActive = step === currentStep;
-            const isCompleted = step < currentStep;
-            
-            return (
-              <View
-                key={step}
-                style={[
-                  styles.progressDot,
-                  isActive && styles.progressDotActive,
-                  isCompleted && styles.progressDotCompleted,
-                ]}
-              />
-            );
-          })}
-        </View>
-        
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {renderStep()}
-        </ScrollView>
-        
-        <View style={styles.footer}>
-          <Button
-            onPress={handleNext}
-            disabled={!canProceed() || isLoading}
-            loading={isLoading}
-            variant="primary"
-            size="large"
-            style={styles.nextButton}
-          >
-            {currentStep === 4 ? 'Complete' : 'Next'}
-          </Button>
-          
-          <TouchableOpacity
-            onPress={handleSkip}
-            disabled={isLoading}
-            style={styles.skipButton}
-          >
-            <Text style={styles.skipText}>
-              {currentStep === 4 ? 'Complete Later' : 'Skip'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
-        <Modal
-          visible={showCityPicker}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowCityPicker(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Your City</Text>
-                <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-                  <IconSymbol
-                    ios_icon_name="xmark"
-                    android_material_icon_name="close"
-                    size={24}
-                    color={colors.text}
-                  />
-                </TouchableOpacity>
-              </View>
-              
-              <ScrollView style={styles.cityList}>
-                {ZIMBABWE_CITIES.map(city => {
-                  const isSelected = city === homeCity;
-                  
-                  return (
-                    <TouchableOpacity
-                      key={city}
-                      style={[styles.cityItem, isSelected && styles.cityItemSelected]}
-                      onPress={() => {
-                        setHomeCity(city);
-                        setShowCityPicker(false);
-                      }}
-                    >
-                      <Text style={[styles.cityItemText, isSelected && styles.cityItemTextSelected]}>
-                        {city}
-                      </Text>
-                      {isSelected && (
-                        <IconSymbol
-                          ios_icon_name="checkmark"
-                          android_material_icon_name="check"
-                          size={20}
-                          color={colors.primary}
-                        />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        <CustomModal
-          visible={showErrorModal}
-          title="Error"
-          message={errorMessage}
-          type="error"
-          onClose={() => setShowErrorModal(false)}
-        />
-      </SafeAreaView>
-    </>
-  );
-}
+type ProfileStep = 'name' | 'type' | 'city' | 'photo';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  progressContainer: {
+  content: {
+    flex: 1,
+    padding: 24,
+  },
+  header: {
+    marginBottom: 32,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  stepIndicator: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
+    marginBottom: 32,
     gap: 8,
   },
-  progressDot: {
+  stepDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.border,
   },
-  progressDotActive: {
-    width: 24,
+  stepDotActive: {
     backgroundColor: colors.primary,
-  },
-  progressDotCompleted: {
-    backgroundColor: colors.success,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-  },
-  stepContent: {
-    flex: 1,
-    paddingTop: 20,
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  stepSubtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 32,
+    width: 24,
   },
   input: {
     backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.border,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    padding: 16,
     fontSize: 16,
     color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: 16,
+  },
+  typeContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  typeButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  typeButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}10`,
+  },
+  typeText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+  },
+  cityGrid: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  cityButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cityButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}10`,
+  },
+  cityText: {
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
   },
   photoContainer: {
     alignItems: 'center',
     marginBottom: 32,
   },
-  photoPlaceholderContainer: {
+  photoPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
     backgroundColor: colors.backgroundAlt,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
-  photoPreview: {
+  photo: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoPlaceholder: {
-    fontSize: 48,
-  },
-  photoText: {
-    fontSize: 12,
-    color: colors.card,
-    marginTop: 4,
+    marginBottom: 16,
   },
   photoButtons: {
+    flexDirection: 'row',
     gap: 12,
   },
   photoButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    gap: 12,
+    gap: 8,
   },
   photoButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  userTypeContainer: {
-    gap: 16,
-  },
-  userTypeCard: {
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-  },
-  userTypeCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.backgroundAlt,
-  },
-  userTypeIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  userTypeTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  userTypeDescription: {
     fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  citySelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 32,
-  },
-  citySelectorText: {
-    fontSize: 16,
     color: colors.text,
-  },
-  citySelectorPlaceholder: {
-    color: colors.textSecondary,
-  },
-  verificationInfo: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  verificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  verificationText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 12,
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    padding: 24,
+    gap: 12,
   },
-  nextButton: {
-    marginBottom: 12,
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  skipText: {
-    fontSize: 16,
-    fontWeight: '600',
+  compressionInfo: {
+    fontSize: 12,
     color: colors.textSecondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  cityList: {
-    maxHeight: 400,
-  },
-  cityItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  cityItemSelected: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  cityItemText: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  cityItemTextSelected: {
-    fontWeight: '600',
-    color: colors.primary,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
+
+export default function ProfileSetupScreen() {
+  const [step, setStep] = useState<ProfileStep>('name');
+  const [fullName, setFullName] = useState('');
+  const [userType, setUserType] = useState<'Passenger' | 'Driver' | null>(null);
+  const [homeCity, setHomeCity] = useState('');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [compressionSavings, setCompressionSavings] = useState<string | null>(null);
+
+  const router = useRouter();
+  const { refreshUser } = useAuth();
+
+  const steps: ProfileStep[] = ['name', 'type', 'city', 'photo'];
+  const currentStepIndex = steps.indexOf(step);
+
+  const handleNext = async () => {
+    console.log('[ProfileSetup] User tapped Next button');
+    
+    if (step === 'name') {
+      setStep('type');
+    } else if (step === 'type') {
+      setStep('city');
+    } else if (step === 'city') {
+      setStep('photo');
+    } else if (step === 'photo') {
+      await handleComplete();
+    }
+  };
+
+  const handleSkip = () => {
+    console.log('[ProfileSetup] User tapped Skip button');
+    
+    if (step === 'photo') {
+      handleComplete();
+    }
+  };
+
+  const handleComplete = async () => {
+    console.log('[ProfileSetup] Completing profile setup');
+    setLoading(true);
+
+    const endTracking = performanceMonitor.trackDataProcessing('profile_setup_complete');
+
+    try {
+      // Update profile
+      await updateProfile({
+        fullName,
+        userType: userType!,
+        homeCity,
+      });
+
+      // Upload photo if provided
+      if (photoUri) {
+        const file = {
+          uri: photoUri,
+          name: 'profile.jpg',
+          type: 'image/jpeg',
+        };
+        await uploadProfilePhoto(file);
+      }
+
+      // Refresh user data
+      await refreshUser();
+
+      console.log('[ProfileSetup] Profile setup completed successfully');
+      router.replace('/(tabs)/(home)');
+    } catch (error: any) {
+      console.error('[ProfileSetup] Error completing setup:', error);
+      CustomModal.show({
+        visible: true,
+        title: 'Setup Failed',
+        message: error.message || 'Failed to complete profile setup. Please try again.',
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+    } finally {
+      setLoading(false);
+      endTracking();
+    }
+  };
+
+  const handlePickImage = async () => {
+    console.log('[ProfileSetup] User tapped Pick Image');
+    
+    const endTracking = performanceMonitor.trackDataProcessing('image_pick_and_compress');
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const originalUri = result.assets[0].uri;
+        
+        // Compress image
+        const compressed = await compressProfilePhoto(originalUri);
+        
+        // Calculate savings
+        const originalSize = result.assets[0].fileSize || 0;
+        const savings = originalSize > 0 
+          ? ((originalSize - compressed.size) / originalSize * 100).toFixed(0)
+          : '0';
+        
+        setCompressionSavings(`${savings}% smaller`);
+        setPhotoUri(compressed.uri);
+        
+        console.log('[ProfileSetup] Image compressed:', {
+          original: originalSize,
+          compressed: compressed.size,
+          savings: `${savings}%`,
+        });
+      }
+    } catch (error) {
+      console.error('[ProfileSetup] Error picking image:', error);
+      CustomModal.show({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to pick image. Please try again.',
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+    } finally {
+      endTracking();
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    console.log('[ProfileSetup] User tapped Take Photo');
+    
+    const endTracking = performanceMonitor.trackDataProcessing('photo_capture_and_compress');
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const originalUri = result.assets[0].uri;
+        
+        // Compress image
+        const compressed = await compressProfilePhoto(originalUri);
+        
+        // Calculate savings
+        const originalSize = result.assets[0].fileSize || 0;
+        const savings = originalSize > 0 
+          ? ((originalSize - compressed.size) / originalSize * 100).toFixed(0)
+          : '0';
+        
+        setCompressionSavings(`${savings}% smaller`);
+        setPhotoUri(compressed.uri);
+        
+        console.log('[ProfileSetup] Photo compressed:', {
+          original: originalSize,
+          compressed: compressed.size,
+          savings: `${savings}%`,
+        });
+      }
+    } catch (error) {
+      console.error('[ProfileSetup] Error taking photo:', error);
+      CustomModal.show({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to take photo. Please try again.',
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+    } finally {
+      endTracking();
+    }
+  };
+
+  const renderStep = () => {
+    switch (step) {
+      case 'name':
+        return (
+          <FadeInView>
+            <View style={styles.header}>
+              <Text style={styles.title}>What's your name?</Text>
+              <Text style={styles.subtitle}>This will be visible to other users</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor={colors.textSecondary}
+              value={fullName}
+              onChangeText={setFullName}
+              autoFocus
+            />
+          </FadeInView>
+        );
+
+      case 'type':
+        return (
+          <FadeInView>
+            <View style={styles.header}>
+              <Text style={styles.title}>How will you use ZimCommute?</Text>
+              <Text style={styles.subtitle}>You can change this later</Text>
+            </View>
+            <View style={styles.typeContainer}>
+              <TouchableOpacity
+                style={[styles.typeButton, userType === 'Passenger' && styles.typeButtonActive]}
+                onPress={() => setUserType('Passenger')}
+              >
+                <IconSymbol
+                  ios_icon_name="person"
+                  android_material_icon_name="person"
+                  size={24}
+                  color={userType === 'Passenger' ? colors.primary : colors.text}
+                />
+                <Text style={styles.typeText}>Passenger</Text>
+                {userType === 'Passenger' && (
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={24}
+                    color={colors.primary}
+                  />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.typeButton, userType === 'Driver' && styles.typeButtonActive]}
+                onPress={() => setUserType('Driver')}
+              >
+                <IconSymbol
+                  ios_icon_name="car"
+                  android_material_icon_name="directions-car"
+                  size={24}
+                  color={userType === 'Driver' ? colors.primary : colors.text}
+                />
+                <Text style={styles.typeText}>Driver</Text>
+                {userType === 'Driver' && (
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={24}
+                    color={colors.primary}
+                  />
+                )}
+              </TouchableOpacity>
+            </View>
+          </FadeInView>
+        );
+
+      case 'city':
+        return (
+          <FadeInView>
+            <View style={styles.header}>
+              <Text style={styles.title}>Where are you based?</Text>
+              <Text style={styles.subtitle}>Your home city in Zimbabwe</Text>
+            </View>
+            <View style={styles.cityGrid}>
+              {ZIMBABWE_CITIES.map((city) => (
+                <TouchableOpacity
+                  key={city}
+                  style={[styles.cityButton, homeCity === city && styles.cityButtonActive]}
+                  onPress={() => setHomeCity(city)}
+                >
+                  <Text style={styles.cityText}>{city}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </FadeInView>
+        );
+
+      case 'photo':
+        return (
+          <FadeInView>
+            <View style={styles.header}>
+              <Text style={styles.title}>Add a profile photo</Text>
+              <Text style={styles.subtitle}>Help others recognize you (optional)</Text>
+            </View>
+            <View style={styles.photoContainer}>
+              {photoUri ? (
+                <OptimizedImage
+                  source={photoUri}
+                  style={styles.photo}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <IconSymbol
+                    ios_icon_name="person.circle"
+                    android_material_icon_name="account-circle"
+                    size={60}
+                    color={colors.textSecondary}
+                  />
+                </View>
+              )}
+              <View style={styles.photoButtons}>
+                <TouchableOpacity style={styles.photoButton} onPress={handleTakePhoto}>
+                  <IconSymbol
+                    ios_icon_name="camera"
+                    android_material_icon_name="camera"
+                    size={20}
+                    color={colors.text}
+                  />
+                  <Text style={styles.photoButtonText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.photoButton} onPress={handlePickImage}>
+                  <IconSymbol
+                    ios_icon_name="photo"
+                    android_material_icon_name="photo"
+                    size={20}
+                    color={colors.text}
+                  />
+                  <Text style={styles.photoButtonText}>Gallery</Text>
+                </TouchableOpacity>
+              </View>
+              {compressionSavings && (
+                <Text style={styles.compressionInfo}>
+                  Image optimized: {compressionSavings}
+                </Text>
+              )}
+            </View>
+          </FadeInView>
+        );
+    }
+  };
+
+  const canProceed = () => {
+    switch (step) {
+      case 'name':
+        return fullName.trim().length > 0;
+      case 'type':
+        return userType !== null;
+      case 'city':
+        return homeCity.length > 0;
+      case 'photo':
+        return true; // Photo is optional
+      default:
+        return false;
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.stepIndicator}>
+          {steps.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.stepDot,
+                index <= currentStepIndex && styles.stepDotActive,
+              ]}
+            />
+          ))}
+        </View>
+
+        {renderStep()}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Button
+          onPress={handleNext}
+          disabled={!canProceed() || loading}
+          loading={loading}
+        >
+          {step === 'photo' ? 'Complete' : 'Next'}
+        </Button>
+        {step === 'photo' && (
+          <Button variant="ghost" onPress={handleSkip} disabled={loading}>
+            Skip for now
+          </Button>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}

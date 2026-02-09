@@ -18,9 +18,14 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colors } from "@/styles/commonStyles";
 import { initializeConnectivityMonitoring } from "@/utils/connectivityManager";
 import { initializeSyncManager } from "@/utils/syncManager";
+import { initializeCrashReporting, setUserContext } from "@/utils/crashReporting";
+import { performanceMonitor } from "@/utils/performanceMonitor";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Initialize crash reporting on app start
+initializeCrashReporting();
 
 /**
  * Auth-aware navigation component
@@ -38,11 +43,24 @@ function RootLayoutNav() {
     setNavigationReady(true);
   }, []);
 
+  // Set user context for crash reporting
+  useEffect(() => {
+    if (user) {
+      setUserContext({
+        id: user.id,
+        phoneNumber: user.phoneNumber,
+        userType: user.userType || undefined,
+      });
+    }
+  }, [user]);
+
   // Initialize offline-first system
   useEffect(() => {
     console.log('[RootLayout] Initializing offline-first system');
     
     const initializeOfflineSystem = async () => {
+      const endTracking = performanceMonitor.trackDataProcessing('offline_system_init');
+      
       try {
         await initializeConnectivityMonitoring();
         console.log('[RootLayout] Connectivity monitoring initialized');
@@ -54,6 +72,8 @@ function RootLayoutNav() {
         }
       } catch (error) {
         console.error('[RootLayout] Error initializing offline system:', error);
+      } finally {
+        endTracking();
       }
     };
 

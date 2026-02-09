@@ -37,7 +37,7 @@ let syncStatus: SyncStatus = {
   error: null,
 };
 
-let syncListeners: Array<(status: SyncStatus) => void> = [];
+let syncListeners: ((status: SyncStatus) => void)[] = [];
 let autoSyncEnabled = true;
 
 /**

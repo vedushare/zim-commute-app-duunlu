@@ -11,10 +11,10 @@ export interface DashboardMetrics {
 }
 
 export interface AnalyticsData {
-  userGrowth: Array<{ date: string; count: number }>;
+  userGrowth: { date: string; count: number }[];
   rideCompletionRate: number;
-  popularRoutes: Array<{ origin: string; destination: string; count: number }>;
-  revenueTrends: Array<{ date: string; amount: number }>;
+  popularRoutes: { origin: string; destination: string; count: number }[];
+  revenueTrends: { date: string; amount: number }[];
 }
 
 export interface AdminUser {
@@ -35,33 +35,33 @@ export interface AdminUser {
 }
 
 export interface AdminUserDetails extends AdminUser {
-  verificationDocuments: Array<{
+  verificationDocuments: {
     id: string;
     documentType: string;
     documentUrl: string;
     status: string;
     uploadedAt: string;
-  }>;
-  ratings: Array<{
+  }[];
+  ratings: {
     id: string;
     rating: number;
     comment: string;
     createdAt: string;
-  }>;
-  bookings: Array<{
+  }[];
+  bookings: {
     id: string;
     rideId: string;
     status: string;
     totalPrice: number;
     createdAt: string;
-  }>;
-  rides: Array<{
+  }[];
+  rides: {
     id: string;
     origin: string;
     destination: string;
     status: string;
     createdAt: string;
-  }>;
+  }[];
 }
 
 export interface VerificationDocument {
