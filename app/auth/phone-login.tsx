@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -9,6 +9,14 @@ import { validateZimbabwePhone, formatPhoneNumber } from '@/constants/zimbabwe';
 import Button from '@/components/button';
 import { sendOTP } from '@/utils/api';
 import { CustomModal } from '@/components/ui/CustomModal';
+import { Image } from 'expo-image';
+
+// Helper to resolve image sources (handles both local require() and remote URLs)
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 export default function PhoneLoginScreen() {
   const router = useRouter();
@@ -83,21 +91,21 @@ export default function PhoneLoginScreen() {
             </Text>
           </View>
 
-          {/* Zimbabwe Landmarks */}
+          {/* Zimbabwe Landmarks - Updated with Great Zimbabwe and Victoria Falls */}
           <View style={styles.landmarksContainer}>
             <View style={styles.landmarkCard}>
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1621414050345-53db43f7e7ab?w=800' }}
+                source={resolveImageSource(require('../../assets/images/24fc7581-94ce-40c8-a246-888a90c315dc.jpeg'))}
                 style={styles.landmarkImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
               <Text style={styles.landmarkLabel}>Victoria Falls</Text>
             </View>
             <View style={styles.landmarkCard}>
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800' }}
+                source={resolveImageSource(require('../../assets/images/04117f2d-2294-41f3-9dc3-4ea3fcc78f1e.jpeg'))}
                 style={styles.landmarkImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
               <Text style={styles.landmarkLabel}>Great Zimbabwe</Text>
             </View>
