@@ -91,7 +91,7 @@ export default function PhoneLoginScreen() {
             </Text>
           </View>
 
-          {/* Zimbabwe Landmarks - Updated with Great Zimbabwe and Victoria Falls */}
+          {/* Zimbabwe Landmarks - Corrected labels */}
           <View style={styles.landmarksContainer}>
             <View style={styles.landmarkCard}>
               <Image
@@ -99,7 +99,7 @@ export default function PhoneLoginScreen() {
                 style={styles.landmarkImage}
                 contentFit="cover"
               />
-              <Text style={styles.landmarkLabel}>Victoria Falls</Text>
+              <Text style={styles.landmarkLabel}>Great Zimbabwe</Text>
             </View>
             <View style={styles.landmarkCard}>
               <Image
@@ -107,7 +107,7 @@ export default function PhoneLoginScreen() {
                 style={styles.landmarkImage}
                 contentFit="cover"
               />
-              <Text style={styles.landmarkLabel}>Great Zimbabwe</Text>
+              <Text style={styles.landmarkLabel}>Victoria Falls</Text>
             </View>
           </View>
 
