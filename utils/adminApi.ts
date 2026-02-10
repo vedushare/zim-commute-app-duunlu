@@ -53,6 +53,36 @@ export const getAdminUsers = (params: {
 export const getAdminUserDetails = (userId: string) =>
   authenticatedGet<AdminUserDetails>(`/api/admin/users/${userId}`);
 
+export const createUser = (data: {
+  phoneNumber: string;
+  fullName?: string;
+  email?: string;
+  userType?: 'Passenger' | 'Driver';
+  homeCity?: string;
+  verificationLevel?: 'PhoneVerified' | 'IDUploaded' | 'FullyVerified';
+}) =>
+  authenticatedPost<{ success: boolean; user: AdminUser }>('/api/admin/users', data);
+
+export const updateUser = (userId: string, data: {
+  fullName?: string;
+  email?: string;
+  userType?: 'Passenger' | 'Driver';
+  homeCity?: string;
+  verificationLevel?: 'PhoneVerified' | 'IDUploaded' | 'FullyVerified';
+}) =>
+  authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}`, data);
+
+export const getUserOTP = (userId: string) =>
+  authenticatedGet<{
+    success: boolean;
+    otp: string;
+    phoneNumber: string;
+    expiresAt: string;
+    verified: boolean;
+    attempts: number;
+    createdAt: string;
+  }>(`/api/admin/users/${userId}/otp`);
+
 export const banUser = (userId: string, reason: string) =>
   authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}/ban`, { reason });
 

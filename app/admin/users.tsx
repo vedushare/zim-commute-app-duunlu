@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { IconSymbol } from '@/components/IconSymbol';
+import type { AdminUser } from '@/types/admin';
 import {
   View,
   Text,
@@ -9,59 +10,70 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { getAdminUsers, banUser, unbanUser, adjustUserWallet } from '@/utils/adminApi';
-import type { AdminUser } from '@/types/admin';
+import { getAdminUsers, banUser, unbanUser, adjustUserWallet, getUserOTP, createUser, updateUser } from '@/utils/adminApi';
 import { CustomModal } from '@/components/ui/CustomModal';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Stack, useRouter } from 'expo-router';
 import Button from '@/components/button';
 
 export default function AdminUsersScreen() {
   const router = useRouter();
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'driver' | 'passenger'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all');
-  
-  const [modalVisible, setModalVisible] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'banned'>('all');
+  const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
-  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [modalType, setModalType] = useState<'success' | 'error' | 'info'>('info');
   
-  const [actionModalVisible, setActionModalVisible] = useState(false);
+  // Action modal states
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionType, setActionType] = useState<'ban' | 'unban' | 'wallet' | 'otp' | 'create' | 'edit'>('ban');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [banReason, setBanReason] = useState('');
-  const [walletAmount, setWalletAmount] = useState('');
-  const [walletReason, setWalletReason] = useState('');
-  const [actionType, setActionType] = useState<'ban' | 'unban' | 'wallet' | null>(null);
+  const [actionInput, setActionInput] = useState('');
+  const [actionAmount, setActionAmount] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  
+  // OTP display
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpData, setOtpData] = useState<any>(null);
+  
+  // Create/Edit user modal
+  const [showUserFormModal, setShowUserFormModal] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    phoneNumber: '',
+    fullName: '',
+    email: '',
+    userType: 'Passenger' as 'Passenger' | 'Driver',
+    homeCity: '',
+    verificationLevel: 'PhoneVerified' as 'PhoneVerified' | 'IDUploaded' | 'FullyVerified',
+  });
 
   const loadUsers = useCallback(async () => {
-    console.log('Loading admin users');
+    console.log('[AdminUsers] Loading users with filters:', { searchQuery, filterStatus });
     try {
       const response = await getAdminUsers({
         search: searchQuery || undefined,
-        page,
-        limit: 20,
-        role: roleFilter,
-        status: statusFilter,
+        status: filterStatus,
+        page: 1,
+        limit: 100,
       });
-      setUsers(response.data);
-      setTotal(response.total);
+      setUsers(response.users);
+      console.log('[AdminUsers] Loaded users:', response.users.length);
     } catch (error: any) {
-      console.error('Failed to load users:', error);
-      showModal('Error', error.message || 'Failed to load users');
+      console.error('[AdminUsers] Error loading users:', error);
+      showModalMessage('Error', error.message || 'Failed to load users', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, roleFilter, statusFilter, searchQuery]);
+  }, [searchQuery, filterStatus]);
 
   useEffect(() => {
     loadUsers();
@@ -69,99 +81,183 @@ export default function AdminUsersScreen() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setPage(1);
     loadUsers();
   };
 
   const handleSearch = () => {
-    setPage(1);
+    setLoading(true);
     loadUsers();
   };
 
-  const showModal = (title: string, message: string, action?: () => void) => {
+  const showModalMessage = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setModalTitle(title);
     setModalMessage(message);
-    setModalAction(() => action);
-    setModalVisible(true);
+    setModalType(type);
+    setShowModal(true);
   };
 
   const handleUserPress = (user: AdminUser) => {
-    router.push(`/admin/users/${user.id}`);
+    console.log('[AdminUsers] User pressed:', user.id);
+    router.push(`/admin/users/${user.id}` as any);
   };
 
   const handleBanUser = (user: AdminUser) => {
     setSelectedUser(user);
     setActionType('ban');
-    setBanReason('');
-    setActionModalVisible(true);
+    setActionInput('');
+    setShowActionModal(true);
   };
 
   const handleUnbanUser = (user: AdminUser) => {
     setSelectedUser(user);
     setActionType('unban');
-    setActionModalVisible(true);
+    setShowActionModal(true);
   };
 
   const handleAdjustWallet = (user: AdminUser) => {
     setSelectedUser(user);
     setActionType('wallet');
-    setWalletAmount('');
-    setWalletReason('');
-    setActionModalVisible(true);
+    setActionInput('');
+    setActionAmount('');
+    setShowActionModal(true);
+  };
+
+  const handleViewOTP = async (user: AdminUser) => {
+    console.log('[AdminUsers] Viewing OTP for user:', user.id);
+    setActionLoading(true);
+    try {
+      const response = await getUserOTP(user.id);
+      setOtpData(response);
+      setShowOTPModal(true);
+    } catch (error: any) {
+      console.error('[AdminUsers] Error fetching OTP:', error);
+      showModalMessage('Error', error.message || 'Failed to fetch OTP', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCreateUser = () => {
+    setActionType('create');
+    setUserFormData({
+      phoneNumber: '',
+      fullName: '',
+      email: '',
+      userType: 'Passenger',
+      homeCity: '',
+      verificationLevel: 'PhoneVerified',
+    });
+    setShowUserFormModal(true);
+  };
+
+  const handleEditUser = (user: AdminUser) => {
+    setSelectedUser(user);
+    setActionType('edit');
+    setUserFormData({
+      phoneNumber: user.phoneNumber,
+      fullName: user.fullName || '',
+      email: user.email || '',
+      userType: (user.userType as 'Passenger' | 'Driver') || 'Passenger',
+      homeCity: user.homeCity || '',
+      verificationLevel: user.verificationLevel,
+    });
+    setShowUserFormModal(true);
   };
 
   const executeAction = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser && actionType !== 'create') return;
+
+    setActionLoading(true);
+    console.log('[AdminUsers] Executing action:', actionType);
 
     try {
-      if (actionType === 'ban') {
-        if (!banReason.trim()) {
-          showModal('Error', 'Please provide a reason for banning this user');
-          return;
-        }
-        await banUser(selectedUser.id, banReason);
-        showModal('Success', 'User has been banned');
-      } else if (actionType === 'unban') {
-        await unbanUser(selectedUser.id);
-        showModal('Success', 'User has been unbanned');
-      } else if (actionType === 'wallet') {
-        const amount = parseFloat(walletAmount);
-        if (isNaN(amount) || amount === 0) {
-          showModal('Error', 'Please enter a valid amount');
-          return;
-        }
-        if (!walletReason.trim()) {
-          showModal('Error', 'Please provide a reason for the adjustment');
-          return;
-        }
-        await adjustUserWallet(selectedUser.id, amount, walletReason);
-        showModal('Success', 'Wallet balance has been adjusted');
+      switch (actionType) {
+        case 'ban':
+          if (!actionInput.trim()) {
+            showModalMessage('Error', 'Please provide a reason for banning', 'error');
+            return;
+          }
+          await banUser(selectedUser!.id, actionInput);
+          showModalMessage('Success', 'User banned successfully', 'success');
+          break;
+
+        case 'unban':
+          await unbanUser(selectedUser!.id);
+          showModalMessage('Success', 'User unbanned successfully', 'success');
+          break;
+
+        case 'wallet':
+          const amount = parseFloat(actionAmount);
+          if (isNaN(amount) || !actionInput.trim()) {
+            showModalMessage('Error', 'Please provide valid amount and reason', 'error');
+            return;
+          }
+          await adjustUserWallet(selectedUser!.id, amount, actionInput);
+          showModalMessage('Success', 'Wallet balance adjusted successfully', 'success');
+          break;
+
+        case 'create':
+          if (!userFormData.phoneNumber.trim()) {
+            showModalMessage('Error', 'Phone number is required', 'error');
+            return;
+          }
+          await createUser(userFormData);
+          showModalMessage('Success', 'User created successfully', 'success');
+          setShowUserFormModal(false);
+          break;
+
+        case 'edit':
+          await updateUser(selectedUser!.id, {
+            fullName: userFormData.fullName || undefined,
+            email: userFormData.email || undefined,
+            userType: userFormData.userType,
+            homeCity: userFormData.homeCity || undefined,
+            verificationLevel: userFormData.verificationLevel,
+          });
+          showModalMessage('Success', 'User updated successfully', 'success');
+          setShowUserFormModal(false);
+          break;
       }
-      
-      setActionModalVisible(false);
+
+      setShowActionModal(false);
       loadUsers();
     } catch (error: any) {
-      console.error('Action failed:', error);
-      showModal('Error', error.message || 'Action failed');
+      console.error('[AdminUsers] Error executing action:', error);
+      showModalMessage('Error', error.message || 'Action failed', 'error');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    const amountNum = typeof amount === 'string' ? parseFloat(amount) : amount;
+    const formattedAmount = `$${amountNum.toFixed(2)}`;
+    return formattedAmount;
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString();
+    const formattedDate = date.toLocaleDateString();
+    return formattedDate;
   };
+
+  const getActionModalTitle = () => {
+    switch (actionType) {
+      case 'ban': return 'Ban User';
+      case 'unban': return 'Unban User';
+      case 'wallet': return 'Adjust Wallet';
+      default: return 'Action';
+    }
+  };
+
+  const actionModalTitle = getActionModalTitle();
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: 'User Management', headerShown: true }} />
+        <Stack.Screen options={{ title: 'User Management' }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading users...</Text>
         </View>
       </SafeAreaView>
     );
@@ -169,11 +265,10 @@ export default function AdminUsersScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: 'User Management', headerShown: true }} />
+      <Stack.Screen options={{ title: 'User Management' }} />
       
-      {/* Search and Filters */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchBar}>
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
           <IconSymbol
             ios_icon_name="magnifyingglass"
             android_material_icon_name="search"
@@ -190,273 +285,362 @@ export default function AdminUsersScreen() {
           />
         </View>
 
-        <View style={styles.filters}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={[styles.filterButton, roleFilter === 'all' && styles.filterButtonActive]}
-              onPress={() => setRoleFilter('all')}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  roleFilter === 'all' && styles.filterButtonTextActive,
-                ]}
-              >
-                All
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, roleFilter === 'driver' && styles.filterButtonActive]}
-              onPress={() => setRoleFilter('driver')}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  roleFilter === 'driver' && styles.filterButtonTextActive,
-                ]}
-              >
-                Drivers
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, roleFilter === 'passenger' && styles.filterButtonActive]}
-              onPress={() => setRoleFilter('passenger')}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  roleFilter === 'passenger' && styles.filterButtonTextActive,
-                ]}
-              >
-                Passengers
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, statusFilter === 'active' && styles.filterButtonActive]}
-              onPress={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  statusFilter === 'active' && styles.filterButtonTextActive,
-                ]}
-              >
-                Active
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, statusFilter === 'banned' && styles.filterButtonActive]}
-              onPress={() => setStatusFilter(statusFilter === 'banned' ? 'all' : 'banned')}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  statusFilter === 'banned' && styles.filterButtonTextActive,
-                ]}
-              >
-                Banned
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterButton, filterStatus === 'all' && styles.filterButtonActive]}
+            onPress={() => setFilterStatus('all')}
+          >
+            <Text style={[styles.filterText, filterStatus === 'all' && styles.filterTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filterStatus === 'active' && styles.filterButtonActive]}
+            onPress={() => setFilterStatus('active')}
+          >
+            <Text style={[styles.filterText, filterStatus === 'active' && styles.filterTextActive]}>
+              Active
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filterStatus === 'banned' && styles.filterButtonActive]}
+            onPress={() => setFilterStatus('banned')}
+          >
+            <Text style={[styles.filterText, filterStatus === 'banned' && styles.filterTextActive]}>
+              Banned
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        <Button
+          onPress={handleCreateUser}
+          variant="primary"
+          size="medium"
+          style={styles.createButton}
+        >
+          Create User
+        </Button>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        <View style={styles.usersList}>
-          {users.map((user) => {
-            const fullName = user.fullName || 'No name';
-            const phoneNumber = user.phoneNumber;
-            const userType = user.userType || 'N/A';
-            const walletBalance = formatCurrency(user.walletBalance);
-            const isBanned = user.isBanned;
-            const createdDate = formatDate(user.createdAt);
+        {users.map((user) => (
+          <View key={user.id} style={styles.userCard}>
+            <TouchableOpacity onPress={() => handleUserPress(user)} style={styles.userInfo}>
+              <View style={styles.userHeader}>
+                <Text style={styles.userName}>{user.fullName || 'No Name'}</Text>
+                {user.isBanned && (
+                  <View style={styles.bannedBadge}>
+                    <Text style={styles.bannedText}>BANNED</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.userPhone}>{user.phoneNumber}</Text>
+              <View style={styles.userMeta}>
+                <Text style={styles.userMetaText}>{user.userType || 'N/A'}</Text>
+                <Text style={styles.userMetaText}>•</Text>
+                <Text style={styles.userMetaText}>{user.verificationLevel}</Text>
+                <Text style={styles.userMetaText}>•</Text>
+                <Text style={styles.userMetaText}>{formatCurrency(user.walletBalance)}</Text>
+              </View>
+              <Text style={styles.userDate}>Joined {formatDate(user.createdAt)}</Text>
+            </TouchableOpacity>
 
-            return (
+            <View style={styles.userActions}>
               <TouchableOpacity
-                key={user.id}
-                style={[styles.userCard, isBanned && styles.userCardBanned]}
-                onPress={() => handleUserPress(user)}
+                style={styles.actionButton}
+                onPress={() => handleViewOTP(user)}
               >
-                <View style={styles.userHeader}>
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{fullName}</Text>
-                    <Text style={styles.userPhone}>{phoneNumber}</Text>
-                  </View>
-                  {isBanned && (
-                    <View style={styles.bannedBadge}>
-                      <Text style={styles.bannedBadgeText}>BANNED</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.userDetails}>
-                  <View style={styles.userDetailItem}>
-                    <Text style={styles.userDetailLabel}>Type:</Text>
-                    <Text style={styles.userDetailValue}>{userType}</Text>
-                  </View>
-                  <View style={styles.userDetailItem}>
-                    <Text style={styles.userDetailLabel}>Wallet:</Text>
-                    <Text style={styles.userDetailValue}>{walletBalance}</Text>
-                  </View>
-                  <View style={styles.userDetailItem}>
-                    <Text style={styles.userDetailLabel}>Joined:</Text>
-                    <Text style={styles.userDetailValue}>{createdDate}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.userActions}>
-                  {!isBanned ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.actionButtonSmall}
-                        onPress={() => handleAdjustWallet(user)}
-                      >
-                        <IconSymbol
-                          ios_icon_name="dollarsign.circle"
-                          android_material_icon_name="attach-money"
-                          size={16}
-                          color={colors.primary}
-                        />
-                        <Text style={styles.actionButtonSmallText}>Wallet</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButtonSmall, styles.actionButtonDanger]}
-                        onPress={() => handleBanUser(user)}
-                      >
-                        <IconSymbol
-                          ios_icon_name="xmark.circle"
-                          android_material_icon_name="block"
-                          size={16}
-                          color={colors.danger}
-                        />
-                        <Text style={[styles.actionButtonSmallText, styles.actionButtonDangerText]}>
-                          Ban
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.actionButtonSmall, styles.actionButtonSuccess]}
-                      onPress={() => handleUnbanUser(user)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="checkmark.circle"
-                        android_material_icon_name="check-circle"
-                        size={16}
-                        color={colors.success}
-                      />
-                      <Text style={[styles.actionButtonSmallText, styles.actionButtonSuccessText]}>
-                        Unban
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                <IconSymbol
+                  ios_icon_name="key.fill"
+                  android_material_icon_name="vpn-key"
+                  size={20}
+                  color={colors.primary}
+                />
               </TouchableOpacity>
-            );
-          })}
-        </View>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleEditUser(user)}
+              >
+                <IconSymbol
+                  ios_icon_name="pencil"
+                  android_material_icon_name="edit"
+                  size={20}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleAdjustWallet(user)}
+              >
+                <IconSymbol
+                  ios_icon_name="dollarsign.circle"
+                  android_material_icon_name="account-balance-wallet"
+                  size={20}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              {user.isBanned ? (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUnbanUser(user)}
+                >
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle"
+                    android_material_icon_name="check-circle"
+                    size={20}
+                    color={colors.success}
+                  />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleBanUser(user)}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark.circle"
+                    android_material_icon_name="block"
+                    size={20}
+                    color={colors.danger}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ))}
 
-        {/* Pagination */}
-        <View style={styles.pagination}>
-          <TouchableOpacity
-            style={[styles.paginationButton, page === 1 && styles.paginationButtonDisabled]}
-            onPress={() => setPage(page - 1)}
-            disabled={page === 1}
-          >
-            <Text style={styles.paginationButtonText}>Previous</Text>
-          </TouchableOpacity>
-          <Text style={styles.paginationText}>
-            Page {page} of {Math.ceil(total / 20)}
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.paginationButton,
-              page >= Math.ceil(total / 20) && styles.paginationButtonDisabled,
-            ]}
-            onPress={() => setPage(page + 1)}
-            disabled={page >= Math.ceil(total / 20)}
-          >
-            <Text style={styles.paginationButtonText}>Next</Text>
-          </TouchableOpacity>
-        </View>
+        {users.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No users found</Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Action Modal */}
-      <CustomModal
-        visible={actionModalVisible}
-        title={
-          actionType === 'ban'
-            ? 'Ban User'
-            : actionType === 'unban'
-            ? 'Unban User'
-            : 'Adjust Wallet'
-        }
-        message=""
-        onCancel={() => setActionModalVisible(false)}
-        onConfirm={executeAction}
-        confirmText={actionType === 'unban' ? 'Unban' : 'Confirm'}
-        cancelText="Cancel"
+      <Modal
+        visible={showActionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionModal(false)}
       >
-        {actionType === 'ban' && (
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalLabel}>Reason for banning:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter reason..."
-              placeholderTextColor={colors.textSecondary}
-              value={banReason}
-              onChangeText={setBanReason}
-              multiline
-              numberOfLines={3}
-            />
+            <Text style={styles.modalTitle}>{actionModalTitle}</Text>
+            
+            {actionType === 'ban' && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Reason for banning..."
+                placeholderTextColor={colors.textSecondary}
+                value={actionInput}
+                onChangeText={setActionInput}
+                multiline
+              />
+            )}
+
+            {actionType === 'wallet' && (
+              <>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Amount (use negative for deduction)"
+                  placeholderTextColor={colors.textSecondary}
+                  value={actionAmount}
+                  onChangeText={setActionAmount}
+                  keyboardType="numeric"
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Reason for adjustment..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={actionInput}
+                  onChangeText={setActionInput}
+                  multiline
+                />
+              </>
+            )}
+
+            {actionType === 'unban' && (
+              <Text style={styles.modalText}>
+                Are you sure you want to unban this user?
+              </Text>
+            )}
+
+            <View style={styles.modalButtons}>
+              <Button
+                onPress={() => setShowActionModal(false)}
+                variant="secondary"
+                size="medium"
+                style={styles.modalButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                onPress={executeAction}
+                variant="primary"
+                size="medium"
+                loading={actionLoading}
+                style={styles.modalButton}
+              >
+                Confirm
+              </Button>
+            </View>
           </View>
-        )}
-        {actionType === 'unban' && (
+        </View>
+      </Modal>
+
+      {/* OTP Display Modal */}
+      <Modal
+        visible={showOTPModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOTPModal(false)}
+      >
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalText}>
-              Are you sure you want to unban {selectedUser?.fullName || 'this user'}?
+            <Text style={styles.modalTitle}>User OTP</Text>
+            {otpData && (
+              <>
+                <View style={styles.otpContainer}>
+                  <Text style={styles.otpCode}>{otpData.otp}</Text>
+                </View>
+                <Text style={styles.otpInfo}>Phone: {otpData.phoneNumber}</Text>
+                <Text style={styles.otpInfo}>
+                  Expires: {new Date(otpData.expiresAt).toLocaleString()}
+                </Text>
+                <Text style={styles.otpInfo}>Attempts: {otpData.attempts}/5</Text>
+                <Text style={styles.otpInfo}>
+                  Status: {otpData.verified ? 'Verified' : 'Pending'}
+                </Text>
+              </>
+            )}
+            <Button
+              onPress={() => setShowOTPModal(false)}
+              variant="primary"
+              size="medium"
+              style={styles.modalButtonFull}
+            >
+              Close
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* User Form Modal */}
+      <Modal
+        visible={showUserFormModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowUserFormModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.formModalContent}>
+            <Text style={styles.modalTitle}>
+              {actionType === 'create' ? 'Create User' : 'Edit User'}
             </Text>
-          </View>
-        )}
-        {actionType === 'wallet' && (
-          <View style={styles.modalContent}>
-            <Text style={styles.modalLabel}>Amount (use negative for deduction):</Text>
+            
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g., 10.00 or -5.00"
+              placeholder="Phone Number (+263...)"
               placeholderTextColor={colors.textSecondary}
-              value={walletAmount}
-              onChangeText={setWalletAmount}
-              keyboardType="numeric"
+              value={userFormData.phoneNumber}
+              onChangeText={(text) => setUserFormData({ ...userFormData, phoneNumber: text })}
+              editable={actionType === 'create'}
             />
-            <Text style={styles.modalLabel}>Reason:</Text>
+            
             <TextInput
               style={styles.modalInput}
-              placeholder="Enter reason..."
+              placeholder="Full Name"
               placeholderTextColor={colors.textSecondary}
-              value={walletReason}
-              onChangeText={setWalletReason}
-              multiline
-              numberOfLines={2}
+              value={userFormData.fullName}
+              onChangeText={(text) => setUserFormData({ ...userFormData, fullName: text })}
             />
-          </View>
-        )}
-      </CustomModal>
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Email"
+              placeholderTextColor={colors.textSecondary}
+              value={userFormData.email}
+              onChangeText={(text) => setUserFormData({ ...userFormData, email: text })}
+              keyboardType="email-address"
+            />
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Home City"
+              placeholderTextColor={colors.textSecondary}
+              value={userFormData.homeCity}
+              onChangeText={(text) => setUserFormData({ ...userFormData, homeCity: text })}
+            />
+
+            <View style={styles.pickerContainer}>
+              <Text style={styles.pickerLabel}>User Type:</Text>
+              <View style={styles.pickerButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.pickerButton,
+                    userFormData.userType === 'Passenger' && styles.pickerButtonActive,
+                  ]}
+                  onPress={() => setUserFormData({ ...userFormData, userType: 'Passenger' })}
+                >
+                  <Text
+                    style={[
+                      styles.pickerButtonText,
+                      userFormData.userType === 'Passenger' && styles.pickerButtonTextActive,
+                    ]}
+                  >
+                    Passenger
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.pickerButton,
+                    userFormData.userType === 'Driver' && styles.pickerButtonActive,
+                  ]}
+                  onPress={() => setUserFormData({ ...userFormData, userType: 'Driver' })}
+                >
+                  <Text
+                    style={[
+                      styles.pickerButtonText,
+                      userFormData.userType === 'Driver' && styles.pickerButtonTextActive,
+                    ]}
+                  >
+                    Driver
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Button
+                onPress={() => setShowUserFormModal(false)}
+                variant="secondary"
+                size="medium"
+                style={styles.modalButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                onPress={executeAction}
+                variant="primary"
+                size="medium"
+                loading={actionLoading}
+                style={styles.modalButton}
+              >
+                {actionType === 'create' ? 'Create' : 'Update'}
+              </Button>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
 
       <CustomModal
-        visible={modalVisible}
+        visible={showModal}
         title={modalTitle}
         message={modalMessage}
-        onConfirm={() => {
-          setModalVisible(false);
-          if (modalAction) modalAction();
-        }}
-        confirmText="OK"
+        type={modalType}
+        onClose={() => setShowModal(false)}
       />
     </SafeAreaView>
   );
@@ -467,196 +651,232 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  searchSection: {
+  header: {
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  searchBar: {
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    paddingHorizontal: 12,
     marginBottom: 12,
   },
   searchInput: {
     flex: 1,
-    height: 48,
-    marginLeft: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     fontSize: 16,
     color: colors.text,
   },
-  filters: {
+  filterContainer: {
     flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
   },
   filterButton: {
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.backgroundAlt,
-    marginRight: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
   },
   filterButtonActive: {
     backgroundColor: colors.primary,
   },
-  filterButtonText: {
+  filterText: {
     fontSize: 14,
-    color: colors.textSecondary,
-  },
-  filterButtonTextActive: {
-    color: '#FFFFFF',
     fontWeight: '600',
+    color: colors.text,
   },
-  usersList: {
-    padding: 16,
+  filterTextActive: {
+    color: '#FFFFFF',
+  },
+  createButton: {
+    marginTop: 4,
+  },
+  scrollView: {
+    flex: 1,
   },
   userCard: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.surface,
+    marginHorizontal: 16,
+    marginVertical: 8,
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-  },
-  userCardBanned: {
-    borderWidth: 2,
-    borderColor: colors.danger,
-  },
-  userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   userInfo: {
     flex: 1,
   },
+  userHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   userName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
+    marginRight: 8,
+  },
+  bannedBadge: {
+    backgroundColor: colors.danger,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  bannedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   userPhone: {
     fontSize: 14,
     color: colors.textSecondary,
-  },
-  bannedBadge: {
-    backgroundColor: colors.danger,
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  bannedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  userDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  userDetailItem: {
-    flex: 1,
-  },
-  userDetailLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
     marginBottom: 4,
   },
-  userDetailValue: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '600',
+  userMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  userMetaText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  userDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   userActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    gap: 8,
   },
-  actionButtonSmall: {
-    flexDirection: 'row',
+  actionButton: {
+    padding: 8,
+  },
+  emptyState: {
+    padding: 40,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.background,
-    marginLeft: 8,
   },
-  actionButtonDanger: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  actionButtonSuccess: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  actionButtonSmallText: {
-    fontSize: 14,
-    color: colors.primary,
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  actionButtonDangerText: {
-    color: colors.danger,
-  },
-  actionButtonSuccessText: {
-    color: colors.success,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  paginationButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  paginationButtonDisabled: {
-    backgroundColor: colors.backgroundAlt,
-  },
-  paginationButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  paginationText: {
-    fontSize: 14,
+  emptyText: {
+    fontSize: 16,
     color: colors.textSecondary,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   modalContent: {
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
   },
-  modalLabel: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 8,
-    fontWeight: '600',
+  formModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 24,
+    marginVertical: 40,
+    marginHorizontal: 20,
   },
-  modalInput: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.text,
     marginBottom: 16,
+    textAlign: 'center',
   },
   modalText: {
     fontSize: 16,
     color: colors.text,
+    marginBottom: 16,
     textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 12,
+    minHeight: 48,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  modalButtonFull: {
+    marginTop: 8,
+  },
+  otpContainer: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  otpCode: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 8,
+  },
+  otpInfo: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  pickerContainer: {
+    marginBottom: 16,
+  },
+  pickerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  pickerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pickerButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+  },
+  pickerButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  pickerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pickerButtonTextActive: {
+    color: '#FFFFFF',
   },
 });

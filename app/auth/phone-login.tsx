@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -79,11 +79,33 @@ export default function PhoneLoginScreen() {
             <Text style={styles.flag}>🇿🇼</Text>
             <Text style={styles.title}>Welcome to ZimCommute</Text>
             <Text style={styles.subtitle}>
-              Enter your phone number to get started
+              Connecting Zimbabwe, One Ride at a Time
             </Text>
           </View>
 
+          {/* Zimbabwe Landmarks */}
+          <View style={styles.landmarksContainer}>
+            <View style={styles.landmarkCard}>
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1621414050345-53db43f7e7ab?w=800' }}
+                style={styles.landmarkImage}
+                resizeMode="cover"
+              />
+              <Text style={styles.landmarkLabel}>Victoria Falls</Text>
+            </View>
+            <View style={styles.landmarkCard}>
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800' }}
+                style={styles.landmarkImage}
+                resizeMode="cover"
+              />
+              <Text style={styles.landmarkLabel}>Great Zimbabwe</Text>
+            </View>
+          </View>
+
           <View style={styles.form}>
+            <Text style={styles.formTitle}>Enter your phone number to get started</Text>
+            
             <PhoneInput
               value={phoneNumber}
               onChangeText={handlePhoneChange}
@@ -127,11 +149,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   flag: {
     fontSize: 64,
@@ -149,8 +171,37 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
+  landmarksContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  landmarkCard: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  landmarkImage: {
+    width: '100%',
+    height: 120,
+  },
+  landmarkLabel: {
+    padding: 8,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
   form: {
     width: '100%',
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   button: {
     marginTop: 8,
