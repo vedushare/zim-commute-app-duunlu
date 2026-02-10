@@ -1,12 +1,11 @@
-
 // Global error logging for runtime errors
 // Captures console.log/warn/error and sends to Natively server for AI debugging
 
-import * as Sentry from '@sentry/react-native';
-import { Platform } from 'react-native';
-
 // Declare __DEV__ global (React Native global for development mode detection)
 declare const __DEV__: boolean;
+
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 
 // Simple debouncing to prevent duplicate logs
 const recentLogs: { [key: string]: boolean } = {};
@@ -26,7 +25,7 @@ const shouldMuteMessage = (message: string): boolean => {
 };
 
 // Queue for batching logs
-let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
+let logQueue: Array<{ level: string; message: string; source: string; timestamp: string; platform: string }> = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
 
@@ -59,7 +58,6 @@ const getLogServerUrl = (): string | null => {
     } else {
       // For native, try to get the Expo dev server URL
       // experienceUrl format: exp://xxx.ngrok.io/... or exp://192.168.1.1:8081/...
-      const Constants = require('expo-constants').default;
       const experienceUrl = (Constants as any).experienceUrl;
       if (experienceUrl) {
         // Convert exp:// to https:// (for tunnels) or http:// (for local)

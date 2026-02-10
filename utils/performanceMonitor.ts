@@ -62,6 +62,19 @@ export function endMetric(name: string): number | null {
 }
 
 /**
+ * Track data processing operations
+ * Returns a function to call when the operation completes
+ */
+export function trackDataProcessing(operationName: string): () => void {
+  const metricName = `data_processing_${operationName}`;
+  startMetric(metricName);
+  
+  return () => {
+    endMetric(metricName);
+  };
+}
+
+/**
  * Track screen load time
  */
 export function trackScreenLoad(screenName: string): () => void {
@@ -154,3 +167,18 @@ export function logPerformanceSummary(): void {
   
   console.log('[Performance] === End Summary ===');
 }
+
+/**
+ * Export as default object for easier imports
+ */
+export const performanceMonitor = {
+  startMetric,
+  endMetric,
+  trackDataProcessing,
+  trackScreenLoad,
+  trackAPICall,
+  getMetrics,
+  getAverageDuration,
+  clearMetrics,
+  logPerformanceSummary,
+};
