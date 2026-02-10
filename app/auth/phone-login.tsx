@@ -102,8 +102,7 @@ export default function PhoneLoginScreen() {
             </Button>
 
             <Text style={styles.disclaimer}>
-              By continuing, you agree to receive an SMS verification code.
-              Standard message rates may apply.
+              By continuing, you agree to our terms and conditions of use, and to receive an SMS verification code. Standard message rates may apply.
             </Text>
           </View>
         </ScrollView>
