@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "ZimCommute",
@@ -25,7 +26,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.veduName.vedushare"
+      "package": "com.anonymous.Natively"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
