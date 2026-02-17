@@ -4,8 +4,8 @@
 // Declare __DEV__ global (React Native global for development mode detection)
 declare const __DEV__: boolean;
 
-import { Platform } from "react-native";
-import Constants from "expo-constants";
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Simple debouncing to prevent duplicate logs
 const recentLogs: { [key: string]: boolean } = {};
@@ -107,6 +107,7 @@ const flushLogs = async () => {
 
   for (const log of logsToSend) {
     try {
+      // Use fetch and handle failure gracefully
       fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,8 +117,12 @@ const flushLogs = async () => {
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
-          if (typeof window !== 'undefined' && window.console) {
-            (window.console as any).__proto__.log.call(console, '[Natively] Fetch error (will not repeat):', e.message || e);
+          if (typeof window !== 'undefined' && (window as any).console && typeof (window as any).console.log === 'function') {
+            try {
+              (window as any).console.log('[Natively] Fetch error (will not repeat):', e.message || e);
+            } catch (err) {
+              // ignore
+            }
           }
         }
       });
@@ -165,16 +170,20 @@ const sendErrorToParent = (level: string, message: string, data: any) => {
   clearLogAfterDelay(errorKey);
 
   try {
-    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-      window.parent.postMessage({
-        type: 'EXPO_ERROR',
-        level: level,
-        message: message,
-        data: data,
-        timestamp: new Date().toISOString(),
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-        source: 'expo-template'
-      }, '*');
+    if (typeof window !== 'undefined' && (window as any).parent && (window as any).parent !== window) {
+      try {
+        (window as any).parent.postMessage({
+          type: 'EXPO_ERROR',
+          level: level,
+          message: message,
+          data: data,
+          timestamp: new Date().toISOString(),
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+          source: 'expo-template'
+        }, '*');
+      } catch (err) {
+        // ignore
+      }
     }
   } catch (error) {
     // Silently fail
@@ -188,9 +197,9 @@ const extractSourceLocation = (stack: string): string => {
   // Look for various patterns in the stack trace
   const patterns = [
     // Pattern for app files: app/filename.tsx:line:column
-    /at .+\/(app\/[^:)]+):(\d+):(\d+)/,
+    /at .+\/([^:)]+):(\d+):(\d+)/,
     // Pattern for components: components/filename.tsx:line:column
-    /at .+\/(components\/[^:)]+):(\d+):(\d+)/,
+    /at .+\/([^:)]+):(\d+):(\d+)/,
     // Pattern for any .tsx/.ts files
     /at .+\/([^/]+\.tsx?):(\d+):(\d+)/,
     // Pattern for bundle files with source maps
@@ -243,7 +252,7 @@ const getCallerInfo = (): string => {
     }
 
     // Pattern 3: Hermes/React Native bundle format
-    match = line.match(/(?:.*\/)?([^/\s:)]+\.[jt]sx?):(\d+):\d+/);
+    match = line.match(/(?:.*\/)?([^/\s:)]+\.[jt]sx?):(\d+):(\d+)/);
     if (match) {
       return `${match[1]}:${match[2]}`;
     }
@@ -287,74 +296,98 @@ export const setupErrorLogging = () => {
 
   // Log initialization info using original console (not intercepted)
   const logServerUrl = getLogServerUrl();
-  originalConsoleLog('[Natively] Setting up error logging...');
-  originalConsoleLog('[Natively] Log server URL:', logServerUrl || 'NOT AVAILABLE');
-  originalConsoleLog('[Natively] Platform:', Platform.OS);
+  try {
+    originalConsoleLog('[Natively] Setting up error logging...');
+    originalConsoleLog('[Natively] Log server URL:', logServerUrl || 'NOT AVAILABLE');
+    originalConsoleLog('[Natively] Platform:', Platform.OS);
+  } catch (e) {
+    // ignore
+  }
 
   // Override console.log to capture and send to server
   console.log = (...args: any[]) => {
-    // Always call original first
-    originalConsoleLog.apply(console, args);
+    try {
+      // Always call original first
+      originalConsoleLog.apply(console, args);
 
-    // Queue log for sending to server
-    const message = stringifyArgs(args);
-    const source = getCallerInfo();
-    queueLog('log', message, source);
+      // Queue log for sending to server
+      const message = stringifyArgs(args);
+      const source = getCallerInfo();
+      queueLog('log', message, source);
+    } catch (err) {
+      try { originalConsoleLog('Error in custom console.log interceptor', err); } catch (e) {}
+    }
   };
 
   // Override console.warn to capture and send to server
   console.warn = (...args: any[]) => {
-    // Always call original first
-    originalConsoleWarn.apply(console, args);
+    try {
+      // Always call original first
+      originalConsoleWarn.apply(console, args);
 
-    // Queue log for sending to server (skip muted messages)
-    const message = stringifyArgs(args);
-    if (shouldMuteMessage(message)) return;
+      // Queue log for sending to server (skip muted messages)
+      const message = stringifyArgs(args);
+      if (shouldMuteMessage(message)) return;
 
-    const source = getCallerInfo();
-    queueLog('warn', message, source);
+      const source = getCallerInfo();
+      queueLog('warn', message, source);
+    } catch (err) {
+      try { originalConsoleWarn('Error in custom console.warn interceptor', err); } catch (e) {}
+    }
   };
 
   // Override console.error to capture and send to server
   console.error = (...args: any[]) => {
-    // Queue log for sending to server (skip muted messages)
-    const message = stringifyArgs(args);
-    if (shouldMuteMessage(message)) return;
+    try {
+      // Queue log for sending to server (skip muted messages)
+      const message = stringifyArgs(args);
+      if (shouldMuteMessage(message)) return;
 
-    // Always call original first
-    originalConsoleError.apply(console, args);
+      // Always call original first
+      originalConsoleError.apply(console, args);
 
-    const source = getCallerInfo();
-    queueLog('error', message, source);
+      const source = getCallerInfo();
+      queueLog('error', message, source);
 
-    // Also send to parent window for web iframe mode
-    sendErrorToParent('error', 'Console Error', message);
+      // Also send to parent window for web iframe mode
+      sendErrorToParent('error', 'Console Error', message);
+    } catch (err) {
+      try { originalConsoleError('Error in custom console.error interceptor', err); } catch (e) {}
+    }
   };
 
   // Capture unhandled errors in web environment
   if (typeof window !== 'undefined') {
-    // Override window.onerror to catch JavaScript errors
-    window.onerror = (message, source, lineno, colno, error) => {
-      const sourceFile = source ? source.split('/').pop() : 'unknown';
-      const errorMessage = `RUNTIME ERROR: ${message} at ${sourceFile}:${lineno}:${colno}`;
+    try {
+      // Override window.onerror to catch JavaScript errors
+      (window as any).onerror = (message: any, source: any, lineno: any, colno: any, error: any) => {
+        const sourceFile = source ? String(source).split('/').pop() : 'unknown';
+        const errorMessage = `RUNTIME ERROR: ${message} at ${sourceFile}:${lineno}:${colno}`;
 
-      queueLog('error', errorMessage, `${sourceFile}:${lineno}:${colno}`);
-      sendErrorToParent('error', 'JavaScript Runtime Error', {
-        message,
-        source: `${sourceFile}:${lineno}:${colno}`,
-        error: error?.stack || error,
-      });
+        queueLog('error', errorMessage, `${sourceFile}:${lineno}:${colno}`);
+        sendErrorToParent('error', 'JavaScript Runtime Error', {
+          message,
+          source: `${sourceFile}:${lineno}:${colno}`,
+          error: error?.stack || error,
+        });
 
-      return false; // Don't prevent default error handling
-    };
+        return false; // Don't prevent default error handling
+      };
 
-    // Capture unhandled promise rejections (web only)
-    if (Platform.OS === 'web') {
-      window.addEventListener('unhandledrejection', (event) => {
-        const message = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
-        queueLog('error', message, '');
-        sendErrorToParent('error', 'Unhandled Promise Rejection', { reason: event.reason });
-      });
+      // Capture unhandled promise rejections (web only)
+      if (Platform.OS === 'web') {
+        window.addEventListener('unhandledrejection', (event: any) => {
+          try {
+            const message = `UNHANDLED PROMISE REJECTION: ${event.reason}`;
+            queueLog('error', message, '');
+            sendErrorToParent('error', 'Unhandled Promise Rejection', { reason: event.reason });
+          } catch (err) {
+            // ignore
+          }
+        });
+      }
+    } catch (err) {
+      // ignore
     }
   }
 };
