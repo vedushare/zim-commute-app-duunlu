@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/styles/commonStyles';
-import { getAdminUsers, banUser, unbanUser, adjustUserWallet, getUserOTP, createUser, updateUser } from '@/utils/adminApi';
+import { getAdminUsers, banUser, unbanUser, adjustUserWallet, getUserOTP, sendUserOTP, createUser, updateUser, deleteUser } from '@/utils/adminApi';
 import { CustomModal } from '@/components/ui/CustomModal';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, useRouter } from 'expo-router';
@@ -34,7 +34,7 @@ export default function AdminUsersScreen() {
   
   // Action modal states
   const [showActionModal, setShowActionModal] = useState(false);
-  const [actionType, setActionType] = useState<'ban' | 'unban' | 'wallet' | 'otp' | 'create' | 'edit'>('ban');
+  const [actionType, setActionType] = useState<'ban' | 'unban' | 'wallet' | 'otp' | 'create' | 'edit' | 'delete'>('ban');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [actionInput, setActionInput] = useState('');
   const [actionAmount, setActionAmount] = useState('');
@@ -137,6 +137,28 @@ export default function AdminUsersScreen() {
     }
   };
 
+  const handleSendOTP = async (user: AdminUser) => {
+    console.log('[AdminUsers] Sending OTP to user:', user.id);
+    setActionLoading(true);
+    try {
+      const response = await sendUserOTP(user.id);
+      setOtpData(response);
+      setShowOTPModal(true);
+      showModalMessage('Success', 'OTP sent successfully', 'success');
+    } catch (error: any) {
+      console.error('[AdminUsers] Error sending OTP:', error);
+      showModalMessage('Error', error.message || 'Failed to send OTP', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteUser = (user: AdminUser) => {
+    setSelectedUser(user);
+    setActionType('delete');
+    setShowActionModal(true);
+  };
+
   const handleCreateUser = () => {
     setActionType('create');
     setUserFormData({
@@ -217,6 +239,11 @@ export default function AdminUsersScreen() {
           showModalMessage('Success', 'User updated successfully', 'success');
           setShowUserFormModal(false);
           break;
+
+        case 'delete':
+          await deleteUser(selectedUser!.id);
+          showModalMessage('Success', 'User deleted successfully', 'success');
+          break;
       }
 
       setShowActionModal(false);
@@ -246,6 +273,7 @@ export default function AdminUsersScreen() {
       case 'ban': return 'Ban User';
       case 'unban': return 'Unban User';
       case 'wallet': return 'Adjust Wallet';
+      case 'delete': return 'Delete User';
       default: return 'Action';
     }
   };
@@ -362,6 +390,17 @@ export default function AdminUsersScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionButton}
+                onPress={() => handleSendOTP(user)}
+              >
+                <IconSymbol
+                  ios_icon_name="paperplane.fill"
+                  android_material_icon_name="send"
+                  size={20}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
                 onPress={() => handleEditUser(user)}
               >
                 <IconSymbol
@@ -407,6 +446,17 @@ export default function AdminUsersScreen() {
                   />
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleDeleteUser(user)}
+              >
+                <IconSymbol
+                  ios_icon_name="trash"
+                  android_material_icon_name="delete"
+                  size={20}
+                  color={colors.danger}
+                />
+              </TouchableOpacity>
             </View>
           </View>
         ))}
@@ -464,6 +514,12 @@ export default function AdminUsersScreen() {
             {actionType === 'unban' && (
               <Text style={styles.modalText}>
                 Are you sure you want to unban this user?
+              </Text>
+            )}
+
+            {actionType === 'delete' && (
+              <Text style={styles.modalText}>
+                Are you sure you want to permanently delete this user? This action cannot be undone.
               </Text>
             )}
 

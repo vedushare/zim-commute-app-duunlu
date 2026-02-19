@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "ZimCommute",
-    "slug": "zim-commute-app-duunlu",
+    "slug": "ZimCommute",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-vma.png",
@@ -37,7 +36,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "zimcommute",
+    "scheme": "ZimCommute",
     "experiments": {
       "typedRoutes": true
     },

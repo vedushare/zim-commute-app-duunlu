@@ -72,6 +72,9 @@ export const updateUser = (userId: string, data: {
 }) =>
   authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}`, data);
 
+export const deleteUser = (userId: string) =>
+  authenticatedDelete<{ success: boolean; message: string }>(`/api/admin/users/${userId}`);
+
 export const getUserOTP = (userId: string) =>
   authenticatedGet<{
     success: boolean;
@@ -82,6 +85,15 @@ export const getUserOTP = (userId: string) =>
     attempts: number;
     createdAt: string;
   }>(`/api/admin/users/${userId}/otp`);
+
+export const sendUserOTP = (userId: string) =>
+  authenticatedPost<{
+    success: boolean;
+    message: string;
+    otp: string;
+    phoneNumber: string;
+    expiresAt: string;
+  }>(`/api/admin/users/${userId}/send-otp`, {});
 
 export const banUser = (userId: string, reason: string) =>
   authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}/ban`, { reason });
