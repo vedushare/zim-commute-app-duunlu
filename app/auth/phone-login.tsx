@@ -39,7 +39,7 @@ export default function PhoneLoginScreen() {
     const formattedPhone = formatPhoneNumber(phoneNumber);
     
     if (!validateZimbabwePhone(formattedPhone)) {
-      setError('Please enter a valid Zimbabwe phone number');
+      setError('Please enter a valid Zimbabwe phone number (e.g., 0712345678)');
       console.log('[PhoneLogin] Phone validation failed:', formattedPhone);
       return;
     }
@@ -51,14 +51,37 @@ export default function PhoneLoginScreen() {
     try {
       const response = await sendOTP(formattedPhone);
       
-      console.log('[PhoneLogin] OTP sent successfully:', response.message);
+      console.log('[PhoneLogin] OTP request successful');
+      console.log('[PhoneLogin] SMS Status:', response.smsStatus);
       console.log('[PhoneLogin] OTP expires in:', response.expiresIn, 'seconds');
       
-      // Navigate to verification screen
-      router.push({
-        pathname: '/auth/verify-otp',
-        params: { phoneNumber: formattedPhone },
-      });
+      // Check SMS status
+      const smsSuccess = response.smsStatus?.includes('successfully') || response.smsStatus?.includes('sent');
+      
+      if (smsSuccess) {
+        // SMS sent successfully
+        setModalTitle('Code Sent');
+        setModalType('success');
+        setModalMessage(
+          `A 6-digit verification code has been sent to ${formattedPhone} via SMS.\n\n` +
+          'Please check your messages and enter the code on the next screen.'
+        );
+      } else {
+        // SMS failed but OTP is stored
+        setModalTitle('OTP Generated');
+        setModalType('info');
+        setModalMessage(
+          `Your verification code has been generated.\n\n` +
+          `SMS Status: ${response.smsStatus}\n\n` +
+          'If you don\'t receive the SMS:\n\n' +
+          '1. Check the SMS configuration in Admin Panel\n' +
+          '2. Check backend logs for the OTP code\n' +
+          '3. Contact support for assistance\n\n' +
+          'You can proceed to enter the code on the next screen.'
+        );
+      }
+      
+      setShowModal(true);
     } catch (err: any) {
       console.error('[PhoneLogin] Error sending OTP:', err);
       const errorMsg = err.message || 'Failed to send OTP. Please try again.';
@@ -71,22 +94,21 @@ export default function PhoneLoginScreen() {
           'Unable to connect to the server. Please check:\n\n' +
           '1. Your internet connection is active\n' +
           '2. The backend server is running\n' +
-          '3. The backend URL is correct in app.json\n\n' +
-          'Current backend URL:\n' +
-          'https://q3k4fsea3tg38xxu8kgvz4h2nvu6gtwh.app.specular.dev'
+          '3. The backend URL is correct\n\n' +
+          'Please try again once the connection is restored.'
+        );
+      } else if (errorMsg.includes('429') || errorMsg.includes('Too many')) {
+        setModalTitle('Rate Limit Exceeded');
+        setModalType('error');
+        setModalMessage(
+          'You have requested too many OTP codes.\n\n' +
+          'Please wait 1 hour before trying again.\n\n' +
+          'This limit helps protect against abuse.'
         );
       } else {
-        // Show informative modal for other errors
-        setModalTitle('OTP Request');
-        setModalType('info');
-        setModalMessage(
-          'Your verification code request has been processed.\n\n' +
-          'If you don\'t receive the SMS within 2 minutes:\n\n' +
-          '1. Check the SMS configuration in the Admin Panel\n' +
-          '2. Contact support to get your verification code\n' +
-          '3. Try the "Resend Code" button on the next screen\n\n' +
-          'You can proceed to the verification screen now.'
-        );
+        setModalTitle('Error');
+        setModalType('error');
+        setModalMessage(errorMsg);
       }
       
       setShowModal(true);
@@ -99,7 +121,7 @@ export default function PhoneLoginScreen() {
   const handleModalClose = () => {
     setShowModal(false);
     
-    // Only navigate if it's not a connection error
+    // Only navigate if it's not a connection error or rate limit error
     if (modalType !== 'error') {
       router.push({
         pathname: '/auth/verify-otp',
