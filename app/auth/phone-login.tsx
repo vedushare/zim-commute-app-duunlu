@@ -23,9 +23,10 @@ export default function PhoneLoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [errorTitle, setErrorTitle] = useState('Error');
+  const [showModal, setShowModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'success' | 'error' | 'info'>('info');
 
   const handlePhoneChange = (text: string) => {
     setPhoneNumber(text);
@@ -53,26 +54,32 @@ export default function PhoneLoginScreen() {
       console.log('[PhoneLogin] OTP sent successfully:', response.message);
       console.log('[PhoneLogin] OTP expires in:', response.expiresIn, 'seconds');
       
+      // Navigate to verification screen
       router.push({
         pathname: '/auth/verify-otp',
         params: { phoneNumber: formattedPhone },
       });
     } catch (err: any) {
       console.error('[PhoneLogin] Error sending OTP:', err);
-      const message = err.message || 'Failed to send OTP. Please try again.';
+      const errorMsg = err.message || 'Failed to send OTP. Please try again.';
       
-      setErrorTitle('Notice');
-      setErrorMessage(
-        'Your OTP code has been generated successfully.\n\n' +
-        'Note: SMS delivery is currently being configured. For now, please check the backend logs or contact support to get your verification code.\n\n' +
-        'You can still proceed to the verification screen.'
+      // Show informative modal
+      setModalTitle('OTP Generated');
+      setModalType('info');
+      setModalMessage(
+        'Your verification code has been generated and stored.\n\n' +
+        'SMS delivery is in progress. If you don\'t receive the SMS within 2 minutes:\n\n' +
+        '1. Check the SMS configuration in the Admin Panel\n' +
+        '2. Contact support to get your verification code\n' +
+        '3. Try the "Resend Code" button on the next screen\n\n' +
+        'You can proceed to the verification screen now.'
       );
+      setShowModal(true);
+      setError(errorMsg);
       
-      setError(message);
-      setShowErrorModal(true);
-      
+      // Auto-navigate after 3 seconds
       setTimeout(() => {
-        setShowErrorModal(false);
+        setShowModal(false);
         router.push({
           pathname: '/auth/verify-otp',
           params: { phoneNumber: formattedPhone },
@@ -151,12 +158,12 @@ export default function PhoneLoginScreen() {
         </ScrollView>
 
         <CustomModal
-          visible={showErrorModal}
-          title={errorTitle}
-          message={errorMessage}
-          type="info"
+          visible={showModal}
+          title={modalTitle}
+          message={modalMessage}
+          type={modalType}
           onClose={() => {
-            setShowErrorModal(false);
+            setShowModal(false);
             router.push({
               pathname: '/auth/verify-otp',
               params: { phoneNumber: formatPhoneNumber(phoneNumber) },

@@ -1,347 +1,278 @@
 
-/**
- * Admin API Client for ZimCommute
- * 
- * This module provides API functions for admin operations.
- * All endpoints require admin or super_admin role.
- */
-
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, BACKEND_URL } from './api';
-import type {
-  DashboardMetrics,
-  AnalyticsData,
-  AdminUser,
-  AdminUserDetails,
-  VerificationDocument,
-  AdminRide,
-  AdminReport,
-  SOSAlert,
-  RouteConfig,
-  PricingTemplate,
-  PromoCode,
-  AuditLog,
-  PaginatedResponse,
-} from '@/types/admin';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from './api';
+import type { AdminUser, DashboardMetrics, AdminReport, VerificationDocument, PromoCode, PricingTemplate, RouteConfig } from '@/types/admin';
 
 // Dashboard
-export const getDashboardMetrics = () =>
-  authenticatedGet<DashboardMetrics>('/api/admin/dashboard/metrics');
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  const response = await authenticatedGet('/api/admin/dashboard/metrics');
+  return response;
+}
 
-export const getDashboardAnalytics = (period: 'daily' | 'weekly' | 'monthly' = 'daily') =>
-  authenticatedGet<AnalyticsData>(`/api/admin/dashboard/analytics?period=${period}`);
-
-// User Management
-export const getAdminUsers = (params: {
-  search?: string;
-  page?: number;
-  limit?: number;
-  role?: 'all' | 'user' | 'driver' | 'passenger';
-  status?: 'all' | 'active' | 'banned';
-}) => {
-  const queryParams = new URLSearchParams();
-  if (params.search) queryParams.append('search', params.search);
-  if (params.page) queryParams.append('page', params.page.toString());
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  if (params.role) queryParams.append('role', params.role);
-  if (params.status) queryParams.append('status', params.status);
+// Users Management
+export async function getAdminUsers(page: number = 1, limit: number = 20, search?: string) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
   
-  return authenticatedGet<PaginatedResponse<AdminUser>>(
-    `/api/admin/users?${queryParams.toString()}`
-  );
-};
+  if (search) {
+    params.append('search', search);
+  }
+  
+  const response = await authenticatedGet(`/api/admin/users?${params.toString()}`);
+  return response;
+}
 
-export const getAdminUserDetails = (userId: string) =>
-  authenticatedGet<AdminUserDetails>(`/api/admin/users/${userId}`);
+export async function banUser(userId: string, reason: string) {
+  const response = await authenticatedPost(`/api/admin/users/${userId}/ban`, { reason });
+  return response;
+}
 
-export const createUser = (data: {
+export async function unbanUser(userId: string) {
+  const response = await authenticatedPost(`/api/admin/users/${userId}/unban`, {});
+  return response;
+}
+
+export async function adjustUserWallet(userId: string, amount: number, reason: string) {
+  const response = await authenticatedPost(`/api/admin/users/${userId}/wallet`, { amount, reason });
+  return response;
+}
+
+export async function getUserOTP(userId: string) {
+  const response = await authenticatedGet(`/api/admin/users/${userId}/otp`);
+  return response;
+}
+
+export async function sendUserOTP(userId: string) {
+  const response = await authenticatedPost(`/api/admin/users/${userId}/otp/send`, {});
+  return response;
+}
+
+export async function createUser(userData: {
   phoneNumber: string;
   fullName?: string;
   email?: string;
   userType?: 'Passenger' | 'Driver';
   homeCity?: string;
-  verificationLevel?: 'PhoneVerified' | 'IDUploaded' | 'FullyVerified';
-}) =>
-  authenticatedPost<{ success: boolean; user: AdminUser }>('/api/admin/users', data);
+  role?: 'user' | 'admin' | 'super_admin';
+}) {
+  const response = await authenticatedPost('/api/admin/users', userData);
+  return response;
+}
 
-export const updateUser = (userId: string, data: {
+export async function updateUser(userId: string, userData: {
   fullName?: string;
   email?: string;
   userType?: 'Passenger' | 'Driver';
   homeCity?: string;
-  verificationLevel?: 'PhoneVerified' | 'IDUploaded' | 'FullyVerified';
-}) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}`, data);
+  role?: 'user' | 'admin' | 'super_admin';
+}) {
+  const response = await authenticatedPut(`/api/admin/users/${userId}`, userData);
+  return response;
+}
 
-export const deleteUser = (userId: string) =>
-  authenticatedDelete<{ success: boolean; message: string }>(`/api/admin/users/${userId}`);
+export async function deleteUser(userId: string) {
+  const response = await authenticatedDelete(`/api/admin/users/${userId}`);
+  return response;
+}
 
-export const getUserOTP = (userId: string) =>
-  authenticatedGet<{
-    success: boolean;
-    otp: string;
-    phoneNumber: string;
-    expiresAt: string;
-    verified: boolean;
-    attempts: number;
-    createdAt: string;
-  }>(`/api/admin/users/${userId}/otp`);
+// Reports Management
+export async function getAdminReports(status?: string) {
+  const params = status ? `?status=${status}` : '';
+  const response = await authenticatedGet(`/api/admin/reports${params}`);
+  return response;
+}
 
-export const sendUserOTP = (userId: string) =>
-  authenticatedPost<{
-    success: boolean;
-    message: string;
-    otp: string;
-    phoneNumber: string;
-    expiresAt: string;
-  }>(`/api/admin/users/${userId}/send-otp`, {});
-
-export const banUser = (userId: string, reason: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}/ban`, { reason });
-
-export const unbanUser = (userId: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}/unban`, {});
-
-export const adjustUserWallet = (userId: string, amount: number, reason: string) =>
-  authenticatedPut<{ newBalance: number }>(`/api/admin/users/${userId}/wallet`, {
-    amount,
-    reason,
-  });
-
-export const updateUserRole = (userId: string, role: 'user' | 'admin' | 'super_admin') =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/users/${userId}/role`, { role });
-
-// Verification Management
-export const getVerificationQueue = (params: {
-  status?: 'pending' | 'approved' | 'rejected';
-  page?: number;
-  limit?: number;
-}) => {
-  const queryParams = new URLSearchParams();
-  if (params.status) queryParams.append('status', params.status);
-  if (params.page) queryParams.append('page', params.page.toString());
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  
-  return authenticatedGet<PaginatedResponse<VerificationDocument>>(
-    `/api/admin/verification/queue?${queryParams.toString()}`
-  );
-};
-
-export const approveVerificationDocument = (documentId: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/verification/${documentId}/approve`, {});
-
-export const rejectVerificationDocument = (documentId: string, reason: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/verification/${documentId}/reject`, {
-    reason,
-  });
-
-// Ride Management
-export const getAdminRides = (params: {
-  status?: 'all' | 'active' | 'completed' | 'cancelled';
-  page?: number;
-  limit?: number;
-  date?: string;
-}) => {
-  const queryParams = new URLSearchParams();
-  if (params.status) queryParams.append('status', params.status);
-  if (params.page) queryParams.append('page', params.page.toString());
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  if (params.date) queryParams.append('date', params.date);
-  
-  return authenticatedGet<PaginatedResponse<AdminRide>>(
-    `/api/admin/rides?${queryParams.toString()}`
-  );
-};
-
-export const cancelRide = (rideId: string, reason: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/rides/${rideId}/cancel`, { reason });
-
-export const adjustRidePrice = (rideId: string, newPrice: number, reason: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/rides/${rideId}/adjust-price`, {
-    newPrice,
-    reason,
-  });
-
-// Safety Moderation
-export const getAdminReports = (params: {
-  status?: 'pending' | 'reviewed' | 'resolved';
-  category?: 'all' | 'Safety' | 'Vehicle' | 'Behavior' | 'Payment';
-  page?: number;
-  limit?: number;
-}) => {
-  const queryParams = new URLSearchParams();
-  if (params.status) queryParams.append('status', params.status);
-  if (params.category && params.category !== 'all') queryParams.append('category', params.category);
-  if (params.page) queryParams.append('page', params.page.toString());
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  
-  return authenticatedGet<PaginatedResponse<AdminReport>>(
-    `/api/admin/reports?${queryParams.toString()}`
-  );
-};
-
-export const reviewReport = (
-  reportId: string,
-  status: 'reviewed' | 'resolved',
-  adminNotes: string,
-  action?: 'ban_user' | 'warn_user' | 'none'
-) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/reports/${reportId}/review`, {
+export async function reviewReport(reportId: string, status: string, adminNotes?: string) {
+  const response = await authenticatedPost(`/api/admin/reports/${reportId}/review`, {
     status,
     adminNotes,
-    action,
   });
+  return response;
+}
 
-export const getSOSAlerts = (status?: 'active' | 'resolved') => {
-  const queryParams = status ? `?status=${status}` : '';
-  return authenticatedGet<{ alerts: SOSAlert[] }>(`/api/admin/sos-alerts${queryParams}`);
-};
+// Verification Queue
+export async function getVerificationQueue() {
+  const response = await authenticatedGet('/api/admin/verification/queue');
+  return response;
+}
 
-export const resolveSOSAlert = (alertId: string, notes: string) =>
-  authenticatedPut<{ success: boolean }>(`/api/admin/sos-alerts/${alertId}/resolve`, { notes });
+export async function approveVerificationDocument(documentId: string) {
+  const response = await authenticatedPost(`/api/admin/verification/${documentId}/approve`, {});
+  return response;
+}
 
-// Configuration - Routes
-export const getRoutes = () =>
-  authenticatedGet<RouteConfig[]>('/api/admin/routes');
+export async function rejectVerificationDocument(documentId: string, reason: string) {
+  const response = await authenticatedPost(`/api/admin/verification/${documentId}/reject`, {
+    reason,
+  });
+  return response;
+}
 
-export const createRoute = (data: {
-  origin: string;
-  destination: string;
-  distanceKm: number;
-  estimatedDurationMinutes: number;
-  suggestedPrice: number;
-  isPopular: boolean;
-}) =>
-  authenticatedPost<RouteConfig>('/api/admin/routes', data);
+// Promo Codes
+export async function getPromoCodes() {
+  const response = await authenticatedGet('/api/admin/promo-codes');
+  return response;
+}
 
-export const updateRoute = (routeId: string, data: {
-  origin: string;
-  destination: string;
-  distanceKm: number;
-  estimatedDurationMinutes: number;
-  suggestedPrice: number;
-  isPopular: boolean;
-}) =>
-  authenticatedPut<RouteConfig>(`/api/admin/routes/${routeId}`, data);
-
-export const deleteRoute = (routeId: string) =>
-  authenticatedDelete<{ success: boolean }>(`/api/admin/routes/${routeId}`);
-
-// Configuration - Pricing Templates
-export const getPricingTemplates = () =>
-  authenticatedGet<PricingTemplate[]>('/api/admin/pricing-templates');
-
-export const createPricingTemplate = (data: {
-  name: string;
-  basePrice: number;
-  pricePerKm: number;
-  commissionRate: number;
-}) =>
-  authenticatedPost<PricingTemplate>('/api/admin/pricing-templates', data);
-
-export const updatePricingTemplate = (templateId: string, data: {
-  name: string;
-  basePrice: number;
-  pricePerKm: number;
-  commissionRate: number;
-  isActive: boolean;
-}) =>
-  authenticatedPut<PricingTemplate>(`/api/admin/pricing-templates/${templateId}`, data);
-
-// Configuration - Promo Codes
-export const getPromoCodes = () =>
-  authenticatedGet<PromoCode[]>('/api/admin/promo-codes');
-
-export const createPromoCode = (data: {
+export async function createPromoCode(promoData: {
   code: string;
   discountType: 'percentage' | 'fixed';
   discountValue: number;
   maxUses?: number;
   validFrom: string;
   validUntil: string;
-}) =>
-  authenticatedPost<PromoCode>('/api/admin/promo-codes', data);
+}) {
+  const response = await authenticatedPost('/api/admin/promo-codes', promoData);
+  return response;
+}
 
-export const updatePromoCode = (promoId: string, data: {
-  code: string;
-  discountType: 'percentage' | 'fixed';
-  discountValue: number;
+export async function updatePromoCode(promoId: string, promoData: {
+  code?: string;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
   maxUses?: number;
-  validFrom: string;
-  validUntil: string;
-  isActive: boolean;
-}) =>
-  authenticatedPut<PromoCode>(`/api/admin/promo-codes/${promoId}`, data);
+  validFrom?: string;
+  validUntil?: string;
+  isActive?: boolean;
+}) {
+  const response = await authenticatedPut(`/api/admin/promo-codes/${promoId}`, promoData);
+  return response;
+}
 
-export const deletePromoCode = (promoId: string) =>
-  authenticatedDelete<{ success: boolean }>(`/api/admin/promo-codes/${promoId}`);
+export async function deletePromoCode(promoId: string) {
+  const response = await authenticatedDelete(`/api/admin/promo-codes/${promoId}`);
+  return response;
+}
+
+// Pricing Templates
+export async function getPricingTemplates() {
+  const response = await authenticatedGet('/api/admin/pricing-templates');
+  return response;
+}
+
+export async function createPricingTemplate(templateData: {
+  name: string;
+  basePrice: number;
+  pricePerKm: number;
+  commissionRate: number;
+}) {
+  const response = await authenticatedPost('/api/admin/pricing-templates', templateData);
+  return response;
+}
+
+export async function updatePricingTemplate(templateId: string, templateData: {
+  name?: string;
+  basePrice?: number;
+  pricePerKm?: number;
+  commissionRate?: number;
+  isActive?: boolean;
+}) {
+  const response = await authenticatedPut(`/api/admin/pricing-templates/${templateId}`, templateData);
+  return response;
+}
+
+export async function deletePricingTemplate(templateId: string) {
+  const response = await authenticatedDelete(`/api/admin/pricing-templates/${templateId}`);
+  return response;
+}
+
+// Routes Configuration
+export async function getRoutes() {
+  const response = await authenticatedGet('/api/admin/routes');
+  return response;
+}
+
+export async function createRoute(routeData: {
+  origin: string;
+  destination: string;
+  distanceKm: number;
+  estimatedDurationMinutes: number;
+  suggestedPrice: number;
+  isPopular?: boolean;
+}) {
+  const response = await authenticatedPost('/api/admin/routes', routeData);
+  return response;
+}
+
+export async function updateRoute(routeId: string, routeData: {
+  origin?: string;
+  destination?: string;
+  distanceKm?: number;
+  estimatedDurationMinutes?: number;
+  suggestedPrice?: number;
+  isPopular?: boolean;
+}) {
+  const response = await authenticatedPut(`/api/admin/routes/${routeId}`, routeData);
+  return response;
+}
+
+export async function deleteRoute(routeId: string) {
+  const response = await authenticatedDelete(`/api/admin/routes/${routeId}`);
+  return response;
+}
+
+export async function initializeRoutes() {
+  const response = await authenticatedPost('/api/admin/routes/initialize', {});
+  return response;
+}
 
 // Audit Logs
-export const getAuditLogs = (params: {
-  adminId?: string;
-  action?: string;
-  page?: number;
-  limit?: number;
-}) => {
-  const queryParams = new URLSearchParams();
-  if (params.adminId) queryParams.append('adminId', params.adminId);
-  if (params.action) queryParams.append('action', params.action);
-  if (params.page) queryParams.append('page', params.page.toString());
-  if (params.limit) queryParams.append('limit', params.limit.toString());
-  
-  return authenticatedGet<PaginatedResponse<AuditLog>>(
-    `/api/admin/audit-logs?${queryParams.toString()}`
-  );
-};
+export async function getAuditLogs(page: number = 1, limit: number = 50) {
+  const response = await authenticatedGet(`/api/admin/audit-logs?page=${page}&limit=${limit}`);
+  return response;
+}
 
-// Initialize Zimbabwe Routes
-export const initializeRoutes = () =>
-  authenticatedPost<{ success: boolean; message: string }>('/api/admin/init-routes', {});
+// SOS Alerts
+export async function getSOSAlerts(status?: 'active' | 'resolved') {
+  const params = status ? `?status=${status}` : '';
+  const response = await authenticatedGet(`/api/admin/sos-alerts${params}`);
+  return response;
+}
+
+export async function resolveSOSAlert(alertId: string) {
+  const response = await authenticatedPost(`/api/admin/sos-alerts/${alertId}/resolve`, {});
+  return response;
+}
+
+// Rides Management
+export async function getAdminRides(status?: string, page: number = 1, limit: number = 20) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+  
+  if (status) {
+    params.append('status', status);
+  }
+  
+  const response = await authenticatedGet(`/api/admin/rides?${params.toString()}`);
+  return response;
+}
+
+export async function cancelRide(rideId: string, reason: string) {
+  const response = await authenticatedPost(`/api/admin/rides/${rideId}/cancel`, { reason });
+  return response;
+}
 
 // SMS Configuration
-export const getSMSConfig = () =>
-  authenticatedGet<{
-    apiUrl: string;
-    apiKey: string;
-    senderId: string;
-    enabled: boolean;
-    testMode: boolean;
-  }>('/api/admin/sms-config');
+export async function getSMSConfig() {
+  const response = await authenticatedGet('/api/admin/sms-config');
+  return response;
+}
 
-export const updateSMSConfig = (data: {
-  apiUrl?: string;
-  apiKey?: string;
-  senderId?: string;
-  enabled?: boolean;
-  testMode?: boolean;
-}) =>
-  authenticatedPost<{ success: boolean; message: string }>('/api/admin/sms-config', data);
+export async function updateSMSConfig(configData: {
+  apiUrl: string;
+  apiKey: string;
+  senderId: string;
+  enabled: boolean;
+  testMode: boolean;
+}) {
+  const response = await authenticatedPost('/api/admin/sms-config', configData);
+  return response;
+}
 
-export const sendTestSMS = (phoneNumber: string) =>
-  authenticatedPost<{ success: boolean; message: string }>('/api/admin/sms-config/test', {
-    phoneNumber,
-  });
-
-// Export Functions (Web only)
-export const exportUsers = () => {
-  if (typeof window !== 'undefined') {
-    window.open(`${BACKEND_URL}/api/admin/export/users?format=csv`, '_blank');
-  }
-};
-
-export const exportRides = (startDate?: string, endDate?: string) => {
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams({ format: 'csv' });
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    window.open(`${BACKEND_URL}/api/admin/export/rides?${params.toString()}`, '_blank');
-  }
-};
-
-export const exportRevenue = (startDate?: string, endDate?: string) => {
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams({ format: 'csv' });
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    window.open(`${BACKEND_URL}/api/admin/export/revenue?${params.toString()}`, '_blank');
-  }
-};
+export async function sendTestSMS(phoneNumber: string) {
+  const response = await authenticatedPost('/api/admin/sms-config/test', { phoneNumber });
+  return response;
+}
