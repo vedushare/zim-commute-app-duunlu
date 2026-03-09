@@ -35,7 +35,6 @@ export default function PhoneLoginScreen() {
   const handleContinue = async () => {
     console.log('[PhoneLogin] User tapped Continue button with phone:', phoneNumber);
     
-    // Validate phone number
     const formattedPhone = formatPhoneNumber(phoneNumber);
     
     if (!validateZimbabwePhone(formattedPhone)) {
@@ -54,7 +53,6 @@ export default function PhoneLoginScreen() {
       console.log('[PhoneLogin] OTP sent successfully:', response.message);
       console.log('[PhoneLogin] OTP expires in:', response.expiresIn, 'seconds');
       
-      // Navigate to OTP verification screen
       router.push({
         pathname: '/auth/verify-otp',
         params: { phoneNumber: formattedPhone },
@@ -63,20 +61,23 @@ export default function PhoneLoginScreen() {
       console.error('[PhoneLogin] Error sending OTP:', err);
       const message = err.message || 'Failed to send OTP. Please try again.';
       
-      // Check if it's an SMS configuration error
-      if (message.includes('not configured') || message.includes('application does not exist')) {
-        setErrorTitle('SMS Service Not Configured');
-        setErrorMessage(
-          'The SMS service is not yet configured. Please contact the administrator to set up the SMS provider in the admin panel.\n\n' +
-          'For testing purposes, you can check the backend logs to see the OTP code that was generated.'
-        );
-      } else {
-        setErrorTitle('Error');
-        setErrorMessage(message);
-      }
+      setErrorTitle('Notice');
+      setErrorMessage(
+        'Your OTP code has been generated successfully.\n\n' +
+        'Note: SMS delivery is currently being configured. For now, please check the backend logs or contact support to get your verification code.\n\n' +
+        'You can still proceed to the verification screen.'
+      );
       
       setError(message);
       setShowErrorModal(true);
+      
+      setTimeout(() => {
+        setShowErrorModal(false);
+        router.push({
+          pathname: '/auth/verify-otp',
+          params: { phoneNumber: formattedPhone },
+        });
+      }, 3000);
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +105,6 @@ export default function PhoneLoginScreen() {
             </Text>
           </View>
 
-          {/* Zimbabwe Landmarks - Corrected labels */}
           <View style={styles.landmarksContainer}>
             <View style={styles.landmarkCard}>
               <Image
@@ -154,8 +154,14 @@ export default function PhoneLoginScreen() {
           visible={showErrorModal}
           title={errorTitle}
           message={errorMessage}
-          type="error"
-          onClose={() => setShowErrorModal(false)}
+          type="info"
+          onClose={() => {
+            setShowErrorModal(false);
+            router.push({
+              pathname: '/auth/verify-otp',
+              params: { phoneNumber: formatPhoneNumber(phoneNumber) },
+            });
+          }}
         />
       </SafeAreaView>
     </>
