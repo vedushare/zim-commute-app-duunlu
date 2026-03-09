@@ -63,30 +63,48 @@ export default function PhoneLoginScreen() {
       console.error('[PhoneLogin] Error sending OTP:', err);
       const errorMsg = err.message || 'Failed to send OTP. Please try again.';
       
-      // Show informative modal
-      setModalTitle('OTP Generated');
-      setModalType('info');
-      setModalMessage(
-        'Your verification code has been generated and stored.\n\n' +
-        'SMS delivery is in progress. If you don\'t receive the SMS within 2 minutes:\n\n' +
-        '1. Check the SMS configuration in the Admin Panel\n' +
-        '2. Contact support to get your verification code\n' +
-        '3. Try the "Resend Code" button on the next screen\n\n' +
-        'You can proceed to the verification screen now.'
-      );
+      // Check if it's a network error
+      if (errorMsg.includes('connect') || errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        setModalTitle('Connection Error');
+        setModalType('error');
+        setModalMessage(
+          'Unable to connect to the server. Please check:\n\n' +
+          '1. Your internet connection is active\n' +
+          '2. The backend server is running\n' +
+          '3. The backend URL is correct in app.json\n\n' +
+          'Current backend URL:\n' +
+          'https://q3k4fsea3tg38xxu8kgvz4h2nvu6gtwh.app.specular.dev'
+        );
+      } else {
+        // Show informative modal for other errors
+        setModalTitle('OTP Request');
+        setModalType('info');
+        setModalMessage(
+          'Your verification code request has been processed.\n\n' +
+          'If you don\'t receive the SMS within 2 minutes:\n\n' +
+          '1. Check the SMS configuration in the Admin Panel\n' +
+          '2. Contact support to get your verification code\n' +
+          '3. Try the "Resend Code" button on the next screen\n\n' +
+          'You can proceed to the verification screen now.'
+        );
+      }
+      
       setShowModal(true);
       setError(errorMsg);
-      
-      // Auto-navigate after 3 seconds
-      setTimeout(() => {
-        setShowModal(false);
-        router.push({
-          pathname: '/auth/verify-otp',
-          params: { phoneNumber: formattedPhone },
-        });
-      }, 3000);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setShowModal(false);
+    
+    // Only navigate if it's not a connection error
+    if (modalType !== 'error') {
+      router.push({
+        pathname: '/auth/verify-otp',
+        params: { phoneNumber: formatPhoneNumber(phoneNumber) },
+      });
     }
   };
 
@@ -162,13 +180,7 @@ export default function PhoneLoginScreen() {
           title={modalTitle}
           message={modalMessage}
           type={modalType}
-          onClose={() => {
-            setShowModal(false);
-            router.push({
-              pathname: '/auth/verify-otp',
-              params: { phoneNumber: formatPhoneNumber(phoneNumber) },
-            });
-          }}
+          onClose={handleModalClose}
         />
       </SafeAreaView>
     </>

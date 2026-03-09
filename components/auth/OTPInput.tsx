@@ -76,7 +76,8 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
             onBlur={() => setFocusedIndex(null)}
             keyboardType="number-pad"
             maxLength={1}
-            selectTextOnFocus
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
           />
         );
       })}

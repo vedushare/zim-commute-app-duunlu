@@ -97,6 +97,12 @@ async function apiCall<T>(
     if (!contentType || !contentType.includes('application/json')) {
       const text = await response.text();
       console.error('[API] Non-JSON response:', text);
+      
+      // Check if it's a 404 error
+      if (response.status === 404) {
+        throw new Error('The requested application does not exist. Please check the backend URL configuration.');
+      }
+      
       throw new Error('Invalid response format from server');
     }
 
@@ -104,6 +110,16 @@ async function apiCall<T>(
 
     if (!response.ok) {
       console.error('[API] Error response:', data);
+      
+      // Provide more specific error messages
+      if (response.status === 404) {
+        throw new Error(data.message || 'The requested resource does not exist');
+      } else if (response.status === 429) {
+        throw new Error(data.message || 'Too many requests. Please try again later.');
+      } else if (response.status === 500) {
+        throw new Error(data.message || 'Server error. Please try again later.');
+      }
+      
       throw new Error(data.message || data.error || `Request failed with status ${response.status}`);
     }
 
@@ -114,10 +130,15 @@ async function apiCall<T>(
     
     // Provide user-friendly error messages
     if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
-      throw new Error('Unable to connect to server. Please check your internet connection.');
+      throw new Error('Unable to connect to server. Please check your internet connection and ensure the backend is running.');
     }
     
-    throw error;
+    // If it's already a formatted error, pass it through
+    if (error.message) {
+      throw error;
+    }
+    
+    throw new Error('An unexpected error occurred. Please try again.');
   }
 }
 
@@ -134,7 +155,7 @@ export async function apiPost<T>(endpoint: string, data?: any): Promise<T> {
     endpoint,
     {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? JSON.stringify(data) : JSON.stringify({}),
     },
     false
   );
@@ -153,7 +174,7 @@ export async function authenticatedPost<T>(endpoint: string, data?: any): Promis
     endpoint,
     {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? JSON.stringify(data) : JSON.stringify({}),
     },
     true
   );
@@ -164,14 +185,22 @@ export async function authenticatedPut<T>(endpoint: string, data?: any): Promise
     endpoint,
     {
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? JSON.stringify(data) : JSON.stringify({}),
     },
     true
   );
 }
 
 export async function authenticatedDelete<T>(endpoint: string): Promise<T> {
-  return apiCall<T>(endpoint, { method: 'DELETE' }, true);
+  // DELETE requests should not have Content-Type header if no body
+  return apiCall<T>(
+    endpoint, 
+    { 
+      method: 'DELETE',
+      headers: {} // Remove Content-Type header for DELETE
+    }, 
+    true
+  );
 }
 
 /**
