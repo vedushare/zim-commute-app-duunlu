@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { View, TextInput, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet, Platform } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 
 interface OTPInputProps {
@@ -76,8 +76,8 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
             onBlur={() => setFocusedIndex(null)}
             keyboardType="number-pad"
             maxLength={1}
-            autoComplete="one-time-code"
-            textContentType="oneTimeCode"
+            autoComplete={Platform.OS === 'ios' ? 'one-time-code' : 'off'}
+            textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
           />
         );
       })}
