@@ -297,6 +297,30 @@ export const getAuditLogs = (params: {
 export const initializeRoutes = () =>
   authenticatedPost<{ success: boolean; message: string }>('/api/admin/init-routes', {});
 
+// SMS Configuration
+export const getSMSConfig = () =>
+  authenticatedGet<{
+    apiUrl: string;
+    apiKey: string;
+    senderId: string;
+    enabled: boolean;
+    testMode: boolean;
+  }>('/api/admin/sms-config');
+
+export const updateSMSConfig = (data: {
+  apiUrl?: string;
+  apiKey?: string;
+  senderId?: string;
+  enabled?: boolean;
+  testMode?: boolean;
+}) =>
+  authenticatedPost<{ success: boolean; message: string }>('/api/admin/sms-config', data);
+
+export const sendTestSMS = (phoneNumber: string) =>
+  authenticatedPost<{ success: boolean; message: string }>('/api/admin/sms-config/test', {
+    phoneNumber,
+  });
+
 // Export Functions (Web only)
 export const exportUsers = () => {
   if (typeof window !== 'undefined') {

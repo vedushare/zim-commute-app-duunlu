@@ -112,6 +112,30 @@ export default function AdminConfigurationScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.configButton}
+            onPress={() => router.push('/admin/sms-config')}
+          >
+            <IconSymbol
+              ios_icon_name="message.fill"
+              android_material_icon_name="message"
+              size={24}
+              color={colors.secondary}
+            />
+            <View style={styles.configButtonContent}>
+              <Text style={styles.configButtonTitle}>SMS Configuration</Text>
+              <Text style={styles.configButtonDescription}>
+                Configure SMS API for OTP delivery
+              </Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron-right"
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
