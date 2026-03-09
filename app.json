@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ZimCommute",
-    "slug": "ZimCommute",
+    "slug": "zimcommute",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-vma.png",
@@ -36,7 +36,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "ZimCommute",
+    "scheme": "zimcommute",
     "experiments": {
       "typedRoutes": true
     },
