@@ -136,7 +136,7 @@ export default function SMSConfigScreen() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [config, setConfig] = useState<SMSConfig>({
-    apiUrl: 'https://sms.localhost.co.zw/api/send',
+    apiUrl: 'https://sms.localhost.co.zw/api/v1/sms/send',
     apiKey: '',
     senderId: 'ZimCommute',
     enabled: false,
@@ -160,9 +160,9 @@ export default function SMSConfigScreen() {
       
       const data = await getSMSConfig();
       setConfig({
-        apiUrl: data.apiUrl,
+        apiUrl: data.apiUrl || 'https://sms.localhost.co.zw/api/v1/sms/send',
         apiKey: data.apiKey,
-        senderId: data.senderId,
+        senderId: data.senderId || 'ZimCommute',
         enabled: data.enabled,
         testMode: data.testMode,
       });
@@ -289,8 +289,7 @@ export default function SMSConfigScreen() {
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              Configure your SMS provider to send OTP codes to users during phone verification.
-              We support integration with https://sms.localhost.co.zw
+              Configure your SMS provider to send OTP codes to users during phone verification. We support integration with https://sms.localhost.co.zw
             </Text>
           </View>
         </View>
@@ -304,7 +303,7 @@ export default function SMSConfigScreen() {
             style={styles.input}
             value={config.apiUrl}
             onChangeText={(text) => setConfig({ ...config, apiUrl: text })}
-            placeholder="https://sms.localhost.co.zw/api/send"
+            placeholder="https://sms.localhost.co.zw/api/v1/sms/send"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -358,7 +357,7 @@ export default function SMSConfigScreen() {
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Test Mode (Log only, don't send)</Text>
+            <Text style={styles.switchLabel}>Test Mode (Log only, don&apos;t send)</Text>
             <Switch
               value={config.testMode}
               onValueChange={(value) => setConfig({ ...config, testMode: value })}
