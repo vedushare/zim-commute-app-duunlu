@@ -25,6 +25,7 @@ export default function PhoneLoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [errorTitle, setErrorTitle] = useState('Error');
 
   const handlePhoneChange = (text: string) => {
     setPhoneNumber(text);
@@ -61,8 +62,20 @@ export default function PhoneLoginScreen() {
     } catch (err: any) {
       console.error('[PhoneLogin] Error sending OTP:', err);
       const message = err.message || 'Failed to send OTP. Please try again.';
+      
+      // Check if it's an SMS configuration error
+      if (message.includes('not configured') || message.includes('application does not exist')) {
+        setErrorTitle('SMS Service Not Configured');
+        setErrorMessage(
+          'The SMS service is not yet configured. Please contact the administrator to set up the SMS provider in the admin panel.\n\n' +
+          'For testing purposes, you can check the backend logs to see the OTP code that was generated.'
+        );
+      } else {
+        setErrorTitle('Error');
+        setErrorMessage(message);
+      }
+      
       setError(message);
-      setErrorMessage(message);
       setShowErrorModal(true);
     } finally {
       setIsLoading(false);
@@ -139,7 +152,7 @@ export default function PhoneLoginScreen() {
 
         <CustomModal
           visible={showErrorModal}
-          title="Error"
+          title={errorTitle}
           message={errorMessage}
           type="error"
           onClose={() => setShowErrorModal(false)}
