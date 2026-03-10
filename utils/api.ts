@@ -276,6 +276,7 @@ export interface SendOTPResponse {
   success: boolean;
   message: string;
   expiresIn: number;
+  smsStatus?: string;
 }
 
 export interface VerifyOTPResponse {
