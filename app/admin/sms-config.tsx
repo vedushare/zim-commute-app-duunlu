@@ -20,10 +20,10 @@ import { getSMSConfig, updateSMSConfig, sendTestSMS } from '@/utils/adminApi';
 
 interface SMSConfig {
   apiUrl: string;
-  apiKey: string;
   senderId: string;
   enabled: boolean;
   testMode: boolean;
+  configured: boolean;
 }
 
 const styles = StyleSheet.create({
@@ -84,6 +84,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 20,
   },
+  warningBox: {
+    backgroundColor: colors.secondary + '20',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  warningText: {
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+    fontFamily: 'monospace',
+  },
   testButton: {
     backgroundColor: colors.secondary,
     borderRadius: 8,
@@ -137,10 +149,10 @@ export default function SMSConfigScreen() {
   const [testing, setTesting] = useState(false);
   const [config, setConfig] = useState<SMSConfig>({
     apiUrl: 'https://sms.localhost.co.zw/api/v1/sms/send',
-    apiKey: '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
     senderId: 'ZimCommute',
     enabled: true,
     testMode: false,
+    configured: false,
   });
   const [testPhone, setTestPhone] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -156,22 +168,16 @@ export default function SMSConfigScreen() {
   const loadConfig = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('Loading SMS configuration...');
-      
       const data = await getSMSConfig();
       setConfig({
         apiUrl: data.apiUrl || 'https://sms.localhost.co.zw/api/v1/sms/send',
-        apiKey: data.apiKey || '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
         senderId: data.senderId || 'ZimCommute',
         enabled: data.enabled !== undefined ? data.enabled : true,
         testMode: data.testMode !== undefined ? data.testMode : false,
+        configured: data.configured ?? false,
       });
-      
-      console.log('SMS config loaded successfully');
     } catch (error: any) {
       console.error('Failed to load SMS config:', error);
-      // If loading fails, keep the default values with API key pre-filled
-      console.log('Using default SMS configuration with pre-filled API key');
     } finally {
       setLoading(false);
     }
@@ -182,11 +188,6 @@ export default function SMSConfigScreen() {
   }, [loadConfig]);
 
   const handleSave = async () => {
-    if (!config.apiKey.trim() || config.apiKey.startsWith('***')) {
-      showModal('Validation Error', 'API Key is required');
-      return;
-    }
-
     if (!config.senderId.trim()) {
       showModal('Validation Error', 'Sender ID is required');
       return;
@@ -194,20 +195,13 @@ export default function SMSConfigScreen() {
 
     try {
       setSaving(true);
-      console.log('Saving SMS configuration with enabled:', config.enabled);
-
       const result = await updateSMSConfig({
         apiUrl: config.apiUrl,
-        apiKey: config.apiKey,
         senderId: config.senderId,
         enabled: config.enabled,
         testMode: config.testMode,
       });
-
-      showModal('Success', result.message || 'SMS configuration saved successfully. SMS service is now enabled.');
-      
-      // Reload config to get masked API key
-      await loadConfig();
+      showModal('Configuration Saved', result.message || 'Settings noted. Remember: the SMS API key must be set via the SMS_API_KEY environment variable on the server.');
     } catch (error: any) {
       console.error('Failed to save SMS config:', error);
       showModal('Error', error.message || 'Failed to save SMS configuration');
@@ -222,20 +216,13 @@ export default function SMSConfigScreen() {
       return;
     }
 
-    if (!config.apiKey.trim() || config.apiKey.startsWith('***')) {
-      showModal('Validation Error', 'Please configure and save API Key first');
-      return;
-    }
-
     try {
       setTesting(true);
-      console.log('Sending test SMS to:', testPhone);
-
       const result = await sendTestSMS(testPhone);
-      showModal('Success', result.message || `Test SMS sent to ${testPhone}`);
+      showModal('Test SMS', result.message || `Test SMS sent to ${testPhone}`);
     } catch (error: any) {
       console.error('Failed to send test SMS:', error);
-      showModal('Error', error.message || 'Failed to send test SMS');
+      showModal('Error', error.message || 'Failed to send test SMS. Ensure SMS_API_KEY is set on the backend server.');
     } finally {
       setTesting(false);
     }
@@ -275,7 +262,7 @@ export default function SMSConfigScreen() {
         {/* Status Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SMS Service Status</Text>
-          
+
           <View style={[styles.statusBadge, !statusEnabled && styles.statusBadgeDisabled]}>
             <IconSymbol
               ios_icon_name={statusEnabled ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
@@ -288,9 +275,34 @@ export default function SMSConfigScreen() {
             </Text>
           </View>
 
+          <View style={[styles.statusBadge, !config.configured && styles.statusBadgeDisabled]}>
+            <IconSymbol
+              ios_icon_name={config.configured ? 'key.fill' : 'key'}
+              android_material_icon_name={config.configured ? 'vpn-key' : 'vpn-key'}
+              size={20}
+              color={config.configured ? colors.success : colors.error}
+            />
+            <Text style={[styles.statusText, !config.configured && styles.statusTextDisabled]}>
+              {config.configured ? 'API Key Configured' : 'API Key Not Set'}
+            </Text>
+          </View>
+
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              Configure your SMS provider to send OTP codes to users during phone verification. We support integration with https://sms.localhost.co.zw
+              Configure your SMS provider to send OTP codes to users during phone verification.
+            </Text>
+          </View>
+        </View>
+
+        {/* Security Notice */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔒 API Key Security</Text>
+          <View style={styles.warningBox}>
+            <Text style={styles.warningText}>
+              The SMS API key is managed exclusively via a backend environment variable for security.
+              It is never stored in the database or transmitted via this UI.{'\n\n'}
+              To set or rotate the key, update the environment variable on your backend server and restart it:{'\n\n'}
+              {'  SMS_API_KEY=your_api_key_here'}
             </Text>
           </View>
         </View>
@@ -310,22 +322,7 @@ export default function SMSConfigScreen() {
             autoCorrect={false}
           />
           <Text style={styles.helpText}>
-            The endpoint URL for sending SMS messages
-          </Text>
-
-          <Text style={styles.label}>API Key</Text>
-          <TextInput
-            style={styles.input}
-            value={config.apiKey}
-            onChangeText={(text) => setConfig({ ...config, apiKey: text })}
-            placeholder="Enter your API key"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.helpText}>
-            Your API key from sms.localhost.co.zw (pre-configured)
+            Configurable via SMS_API_URL environment variable
           </Text>
 
           <Text style={styles.label}>Sender ID</Text>
@@ -339,7 +336,7 @@ export default function SMSConfigScreen() {
             maxLength={11}
           />
           <Text style={styles.helpText}>
-            The name that appears as the sender (max 11 characters)
+            The name that appears as the sender (max 11 characters). Configurable via SMS_SENDER_ID.
           </Text>
         </View>
 
@@ -413,3 +410,4 @@ export default function SMSConfigScreen() {
     </SafeAreaView>
   );
 }
+

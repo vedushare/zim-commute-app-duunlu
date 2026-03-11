@@ -263,7 +263,6 @@ export async function getSMSConfig() {
 
 export async function updateSMSConfig(configData: {
   apiUrl: string;
-  apiKey: string;
   senderId: string;
   enabled: boolean;
   testMode: boolean;

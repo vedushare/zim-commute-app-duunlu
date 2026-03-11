@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
 import { isAdminUser, isSuperAdmin, logAdminAction } from '../utils/admin.js';
+import { getSMSRuntimeConfig, sendSMS } from '../utils/sms.js';
 
 export function register(app: App, fastify: FastifyInstance) {
   const requireAuth = app.requireAuth();
@@ -678,6 +679,155 @@ export function register(app: App, fastify: FastifyInstance) {
           message: 'Failed to fetch audit logs',
         });
       }
+    }
+  );
+
+  // GET /api/admin/sms-config - Return non-secret SMS config (apiKey always empty)
+  fastify.get(
+    '/api/admin/sms-config',
+    {
+      schema: {
+        description: 'Get SMS configuration (non-secret fields only)',
+        tags: ['admin'],
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      app.logger.info({ adminId }, 'Fetching SMS config');
+
+      const cfg = getSMSRuntimeConfig();
+
+      return {
+        apiUrl: cfg.apiUrl,
+        apiKey: '', // API key is never returned — set SMS_API_KEY env var on the server
+        senderId: cfg.senderId,
+        enabled: cfg.enabled,
+        testMode: cfg.testMode,
+        configured: cfg.configured,
+      };
+    }
+  );
+
+  // POST /api/admin/sms-config - Accept non-secret fields only; apiKey is ignored
+  fastify.post<{
+    Body: {
+      apiUrl?: string;
+      senderId?: string;
+      enabled?: boolean;
+      testMode?: boolean;
+    };
+  }>(
+    '/api/admin/sms-config',
+    {
+      schema: {
+        description: 'Update non-secret SMS configuration fields',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          properties: {
+            apiUrl: { type: 'string' },
+            senderId: { type: 'string' },
+            enabled: { type: 'boolean' },
+            testMode: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      const isSA = await isSuperAdmin(app, adminId);
+      if (!isSA) {
+        return reply.status(403).send({
+          success: false,
+          message: 'Super admin access required to update SMS configuration',
+        });
+      }
+
+      app.logger.info({ adminId }, 'SMS config update requested');
+
+      // apiKey is intentionally ignored here — it must be set via environment variable
+      return {
+        success: true,
+        message:
+          'Non-secret SMS settings noted. ' +
+          'To set or update the SMS API key, configure the SMS_API_KEY environment variable on the backend server and restart it. ' +
+          'Other settings (SMS_API_URL, SMS_SENDER_ID, SMS_ENABLED, SMS_TEST_MODE) are also controlled via environment variables.',
+      };
+    }
+  );
+
+  // POST /api/admin/sms-config/test - Send a test SMS using SMS_API_KEY env var
+  fastify.post<{ Body: { phoneNumber?: string } }>(
+    '/api/admin/sms-config/test',
+    {
+      schema: {
+        description: 'Send a test SMS using current env-var SMS configuration',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          properties: {
+            phoneNumber: { type: 'string' },
+          },
+          required: ['phoneNumber'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      const { phoneNumber } = request.body as { phoneNumber?: string };
+
+      if (!phoneNumber) {
+        return reply.status(400).send({
+          success: false,
+          message: 'phoneNumber is required',
+        });
+      }
+
+      const cfg = getSMSRuntimeConfig();
+
+      if (!cfg.configured) {
+        app.logger.warn(
+          { adminId },
+          'Test SMS requested but SMS_API_KEY is not configured'
+        );
+        return reply.status(503).send({
+          success: false,
+          message:
+            'SMS_API_KEY is not set on the backend server. ' +
+            'Set the SMS_API_KEY environment variable and restart the backend to enable SMS.',
+        });
+      }
+
+      app.logger.info({ adminId, phoneNumber }, 'Sending test SMS');
+
+      const result = await sendSMS(
+        phoneNumber,
+        'ZimCommute test SMS — configuration is working correctly.'
+      );
+
+      if (result.status === 'sent' || result.status === 'test_mode') {
+        return {
+          success: true,
+          message: result.message,
+          smsStatus: result.status,
+        };
+      }
+
+      app.logger.error(
+        { adminId, phoneNumber, smsStatus: result.status, smsMessage: result.message },
+        'Test SMS failed'
+      );
+      return reply.status(500).send({
+        success: false,
+        message: result.message,
+        smsStatus: result.status,
+      });
     }
   );
 }

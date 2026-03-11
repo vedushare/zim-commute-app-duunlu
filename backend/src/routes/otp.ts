@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, gt } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
+import { sendOTPSMS } from '../utils/sms.js';
 
 // Zimbabwe phone format validation
 const ZIMBABWE_PHONE_REGEX = /^(?:\+263|0)7(?:1|3|7|8)[0-9]{7}$/;
@@ -131,6 +132,20 @@ export function register(app: App, fastify: FastifyInstance) {
           { phoneNumber: normalizedPhone, expiresAt },
           'OTP generated and stored successfully'
         );
+
+        // Attempt to send SMS — non-fatal; OTP is still valid even if SMS fails
+        const smsResult = await sendOTPSMS(normalizedPhone, otp);
+        if (smsResult.status !== 'sent' && smsResult.status !== 'test_mode') {
+          app.logger.error(
+            { phoneNumber: normalizedPhone, smsStatus: smsResult.status, smsMessage: smsResult.message },
+            'SMS sending failed — OTP still created and valid'
+          );
+        } else {
+          app.logger.info(
+            { phoneNumber: normalizedPhone, smsStatus: smsResult.status },
+            'SMS dispatch complete'
+          );
+        }
 
         return {
           success: true,
@@ -449,6 +464,20 @@ export function register(app: App, fastify: FastifyInstance) {
           { phoneNumber: normalizedPhone, expiresAt },
           'New OTP generated and stored'
         );
+
+        // Attempt to send SMS — non-fatal; OTP is still valid even if SMS fails
+        const smsResult = await sendOTPSMS(normalizedPhone, newOtp);
+        if (smsResult.status !== 'sent' && smsResult.status !== 'test_mode') {
+          app.logger.error(
+            { phoneNumber: normalizedPhone, smsStatus: smsResult.status, smsMessage: smsResult.message },
+            'SMS sending failed on resend — OTP still created and valid'
+          );
+        } else {
+          app.logger.info(
+            { phoneNumber: normalizedPhone, smsStatus: smsResult.status },
+            'SMS dispatch complete on resend'
+          );
+        }
 
         return {
           success: true,
