@@ -137,7 +137,7 @@ export default function SMSConfigScreen() {
   const [testing, setTesting] = useState(false);
   const [config, setConfig] = useState<SMSConfig>({
     apiUrl: 'https://sms.localhost.co.zw/api/v1/sms/send',
-    apiKey: '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
+    apiKey: '',
     senderId: 'ZimCommute',
     enabled: true,
     testMode: false,
@@ -161,7 +161,7 @@ export default function SMSConfigScreen() {
       const data = await getSMSConfig();
       setConfig({
         apiUrl: data.apiUrl || 'https://sms.localhost.co.zw/api/v1/sms/send',
-        apiKey: data.apiKey || '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
+        apiKey: '', // API key is managed server-side via SMS_API_KEY env var
         senderId: data.senderId || 'ZimCommute',
         enabled: data.enabled !== undefined ? data.enabled : true,
         testMode: data.testMode !== undefined ? data.testMode : false,
@@ -170,8 +170,7 @@ export default function SMSConfigScreen() {
       console.log('SMS config loaded successfully');
     } catch (error: any) {
       console.error('Failed to load SMS config:', error);
-      // If loading fails, keep the default values with API key pre-filled
-      console.log('Using default SMS configuration with pre-filled API key');
+      console.log('Using default SMS configuration');
     } finally {
       setLoading(false);
     }
@@ -182,11 +181,6 @@ export default function SMSConfigScreen() {
   }, [loadConfig]);
 
   const handleSave = async () => {
-    if (!config.apiKey.trim() || config.apiKey.startsWith('***')) {
-      showModal('Validation Error', 'API Key is required');
-      return;
-    }
-
     if (!config.senderId.trim()) {
       showModal('Validation Error', 'Sender ID is required');
       return;
@@ -198,16 +192,12 @@ export default function SMSConfigScreen() {
 
       const result = await updateSMSConfig({
         apiUrl: config.apiUrl,
-        apiKey: config.apiKey,
         senderId: config.senderId,
         enabled: config.enabled,
         testMode: config.testMode,
       });
 
-      showModal('Success', result.message || 'SMS configuration saved successfully. SMS service is now enabled.');
-      
-      // Reload config to get masked API key
-      await loadConfig();
+      showModal('Success', result.message || 'SMS configuration saved successfully.');
     } catch (error: any) {
       console.error('Failed to save SMS config:', error);
       showModal('Error', error.message || 'Failed to save SMS configuration');
@@ -219,11 +209,6 @@ export default function SMSConfigScreen() {
   const handleTestSMS = async () => {
     if (!testPhone.trim()) {
       showModal('Validation Error', 'Please enter a phone number to test');
-      return;
-    }
-
-    if (!config.apiKey.trim() || config.apiKey.startsWith('***')) {
-      showModal('Validation Error', 'Please configure and save API Key first');
       return;
     }
 
@@ -314,19 +299,11 @@ export default function SMSConfigScreen() {
           </Text>
 
           <Text style={styles.label}>API Key</Text>
-          <TextInput
-            style={styles.input}
-            value={config.apiKey}
-            onChangeText={(text) => setConfig({ ...config, apiKey: text })}
-            placeholder="Enter your API key"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.helpText}>
-            Your API key from sms.localhost.co.zw (pre-configured)
-          </Text>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              The API key is managed securely via the <Text style={{ fontWeight: '700' }}>SMS_API_KEY</Text> environment variable on the server. It is never stored in the app or returned by the API. To update the key, set the environment variable on the backend and restart the server.
+            </Text>
+          </View>
 
           <Text style={styles.label}>Sender ID</Text>
           <TextInput

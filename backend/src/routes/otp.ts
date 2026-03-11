@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, gt } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
+import { sendOTPSMS } from '../utils/sms.js';
 
 // Zimbabwe phone format validation
 const ZIMBABWE_PHONE_REGEX = /^(?:\+263|0)7(?:1|3|7|8)[0-9]{7}$/;
@@ -131,6 +132,16 @@ export function register(app: App, fastify: FastifyInstance) {
           { phoneNumber: normalizedPhone, expiresAt },
           'OTP generated and stored successfully'
         );
+
+        // Send OTP via SMS (non-blocking – log failure but don't fail the request)
+        try {
+          await sendOTPSMS(normalizedPhone, otp);
+        } catch (smsError) {
+          app.logger.error(
+            { err: smsError, phoneNumber: normalizedPhone },
+            'Failed to send OTP SMS – check SMS_API_KEY env var'
+          );
+        }
 
         return {
           success: true,
@@ -449,6 +460,16 @@ export function register(app: App, fastify: FastifyInstance) {
           { phoneNumber: normalizedPhone, expiresAt },
           'New OTP generated and stored'
         );
+
+        // Send new OTP via SMS
+        try {
+          await sendOTPSMS(normalizedPhone, newOtp);
+        } catch (smsError) {
+          app.logger.error(
+            { err: smsError, phoneNumber: normalizedPhone },
+            'Failed to send resend OTP SMS – check SMS_API_KEY env var'
+          );
+        }
 
         return {
           success: true,

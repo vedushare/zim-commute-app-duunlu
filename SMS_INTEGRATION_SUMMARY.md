@@ -1,117 +1,98 @@
 
-# SMS Integration Complete ✅
+# SMS Integration – Environment-Variable Secret Handling ✅
+
+> **Security update:** The SMS API key is now sourced **exclusively from the `SMS_API_KEY`
+> environment variable** on the backend server.  
+> ⚠️ **Never commit a real API key to the repository.**
 
 ## What Was Implemented
 
-I've successfully integrated the SMS provider `https://sms.localhost.co.zw` for sending OTP messages in your ZimCommute app.
+SMS provider `https://sms.localhost.co.zw` is integrated for sending OTP messages.
 
-## Files Created/Modified
+## Files Created / Modified
 
 ### Backend Files
 
 1. **`backend/src/utils/sms.ts`** (NEW)
-   - Core SMS service with functions for sending messages
-   - `sendSMS()` - Low-level SMS sending
-   - `sendOTPSMS()` - Send OTP to users
-   - `sendAdminOTPSMS()` - Send admin-triggered OTP
-   - `isSMSConfigured()` - Check if SMS is configured
+   - Core SMS service: `sendSMS()`, `sendOTPSMS()`, `getSMSRuntimeConfig()`
+   - Reads **all secrets from env vars** – no secret is ever hardcoded.
+   - Validates that `SMS_API_KEY` is present before sending; logs a clear error if missing.
+   - Supports test mode (`SMS_TEST_MODE=true`) to log messages without sending.
 
 2. **`backend/src/routes/otp.ts`** (UPDATED)
-   - Integrated SMS sending into OTP flow
-   - Sends SMS when OTP is generated
-   - Sends SMS when OTP is resent
-   - Graceful fallback in development mode
+   - Sends SMS via `sendOTPSMS()` after storing the OTP in the database.
+   - SMS failure is non-fatal – request succeeds; error is logged.
 
-3. **`backend/src/routes/admin-users.ts`** (UPDATED)
-   - Added `GET /api/admin/users/:userId/otp` - View user's current OTP
-   - Added `POST /api/admin/users/:userId/send-otp` - Send OTP to user
-   - Admin can trigger OTP sends via SMS
+3. **`backend/src/routes/admin-config.ts`** (UPDATED)
+   - `GET /api/admin/sms-config` – returns config from env vars; `apiKey` is always `""`.
+   - `POST /api/admin/sms-config` – accepts non-secret fields only; ignores any `apiKey`.
+   - `POST /api/admin/sms-config/test` – sends a test SMS using `SMS_API_KEY`.
 
 4. **`backend/.env.example`** (NEW)
-   - Template for environment variables
-   - Documents required SMS configuration
+   - Template documenting all required and optional SMS env vars.
 
-5. **`backend/SMS_INTEGRATION.md`** (NEW)
-   - Complete documentation for SMS integration
-   - API endpoints, configuration, testing, troubleshooting
+5. **`app/admin/sms-config.tsx`** (UPDATED)
+   - Hardcoded API key removed; default is `""`.
+   - API Key field replaced with an info box explaining env-var management.
+   - `handleSave` and `handleTestSMS` no longer require or transmit an API key.
+
+6. **`utils/adminApi.ts`** (UPDATED)
+   - `apiKey` removed from the `updateSMSConfig` parameter type.
 
 ## Configuration Required
 
 ### Environment Variables
 
-Add these to your backend `.env` file:
+Add these to your backend `.env` file (copy from `backend/.env.example`):
 
 ```bash
-SMS_PROVIDER_URL=https://sms.localhost.co.zw/api/send
-SMS_API_KEY=your_api_key_here
-SMS_SENDER_ID=ZimCommute
-```
+# Required – obtain from https://sms.localhost.co.zw dashboard
+# ⚠️  DO NOT commit this value to the repository
+SMS_API_KEY=<your-key>
 
-**IMPORTANT:** You need to obtain an API key from your SMS provider at `https://sms.localhost.co.zw`
+# Optional overrides
+SMS_API_URL=https://sms.localhost.co.zw/api/v1/sms/send
+SMS_SENDER_ID=ZimCommute
+SMS_ENABLED=true
+SMS_TEST_MODE=false
+```
 
 ## How It Works
 
 ### User Flow
 
-1. **User requests OTP:**
-   - Frontend calls `POST /api/otp/send` with phone number
-   - Backend generates 6-digit OTP
-   - Backend stores OTP in database
-   - Backend sends SMS via `https://sms.localhost.co.zw`
-   - User receives SMS: "Your ZimCommute verification code is: 123456. Valid for 5 minutes."
-
-2. **User verifies OTP:**
-   - Frontend calls `POST /api/otp/verify` with phone number and OTP
-   - Backend validates OTP
-   - Backend creates/updates user account
-   - User is authenticated
+1. Frontend calls `POST /api/otp/send` with phone number.
+2. Backend generates OTP, stores it, then calls `sendOTPSMS()`.
+3. `sendOTPSMS()` reads `SMS_API_KEY` from env and POSTs to the provider.
+4. User receives SMS with the 6-digit code.
 
 ### Admin Flow
 
-1. **Admin views user OTP:**
-   - Admin panel calls `GET /api/admin/users/:userId/otp`
-   - Backend returns current OTP, expiration, and status
+- **GET /api/admin/sms-config** – returns `{ apiUrl, senderId, enabled, testMode, configured }`.
+  `apiKey` is always empty; `configured: true` indicates `SMS_API_KEY` is set.
+- **POST /api/admin/sms-config** – updates non-secret display fields (informational only;
+  changes require env-var update + server restart).
+- **POST /api/admin/sms-config/test** – sends a test SMS using the server-side key.
 
-2. **Admin sends OTP to user:**
-   - Admin panel calls `POST /api/admin/users/:userId/send-otp`
-   - Backend generates new OTP
-   - Backend sends SMS with "[Admin]" prefix
-   - Admin sees the OTP code in response
+## Security Guarantees
 
-## SMS Provider API Format
-
-The backend sends requests to `https://sms.localhost.co.zw/api/send` in this format:
-
-```json
-{
-  "apiKey": "your_api_key",
-  "senderId": "ZimCommute",
-  "recipient": "+263712345678",
-  "message": "Your ZimCommute verification code is: 123456. Valid for 5 minutes. Do not share this code with anyone."
-}
-```
-
-**Note:** If your SMS provider uses a different API format, you'll need to update the `sendSMS()` function in `backend/src/utils/sms.ts` to match their API specification.
+- API key is **never** stored in the database, returned by any API, committed to git, or
+  logged.
+- Admin UI has no way to read or submit the API key.
+- If `SMS_API_KEY` is missing, a clear error is logged and the test/send endpoints return
+  a `503 Service Unavailable` with an actionable message.
 
 ## Security Features
 
-✅ **Rate Limiting:** 3 OTP requests per hour per phone number
-✅ **OTP Expiration:** OTPs expire after 5 minutes
-✅ **Attempt Limiting:** Maximum 5 verification attempts per OTP
-✅ **Phone Validation:** Only Zimbabwe phone numbers (+263 or 07...)
-✅ **Secure Storage:** OTPs stored in database with timestamps
-
-## Development Mode
-
-In development mode (when `NODE_ENV !== 'production'`):
-- OTPs are generated and stored in database
-- SMS sending is attempted but won't fail the request if it fails
-- OTP codes are logged to console for testing
-- You can test without a configured SMS provider
+✅ Rate Limiting: 3 OTP requests per hour per phone number  
+✅ OTP Expiration: 5 minutes  
+✅ Attempt Limiting: 5 attempts per OTP  
+✅ Phone Validation: Zimbabwe numbers only (+263 / 07xx)  
+✅ API key sourced from env var only – never committed
 
 ## Testing
 
-### Test OTP Send (Development)
+### Send OTP
 
 ```bash
 curl -X POST http://localhost:3000/api/otp/send \
@@ -119,82 +100,22 @@ curl -X POST http://localhost:3000/api/otp/send \
   -d '{"phoneNumber": "+263712345678"}'
 ```
 
-Check backend logs for the OTP code:
-```
-[INFO] Development mode: OTP not sent via SMS but available in logs
-OTP: 123456
-```
-
-### Test OTP Verify
+### Test via Admin API
 
 ```bash
-curl -X POST http://localhost:3000/api/otp/verify \
+# Requires valid admin session token
+curl -X POST http://localhost:3000/api/admin/sms-config/test \
+  -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
-  -d '{"phoneNumber": "+263712345678", "otp": "123456"}'
+  -d '{"phoneNumber": "+263712345678"}'
 ```
-
-## Next Steps
-
-1. **Get SMS API Key:**
-   - Contact `https://sms.localhost.co.zw`
-   - Register for an account
-   - Obtain your API key
-
-2. **Configure Environment:**
-   - Add `SMS_API_KEY` to your `.env` file
-   - Verify `SMS_PROVIDER_URL` is correct
-   - Set `SMS_SENDER_ID` (default: "ZimCommute")
-
-3. **Test in Production:**
-   - Deploy backend with environment variables
-   - Test OTP send with real phone number
-   - Verify SMS is received
-   - Test OTP verification
-
-4. **Monitor:**
-   - Check backend logs for SMS send success/failures
-   - Monitor rate limiting
-   - Track OTP verification rates
 
 ## Troubleshooting
 
-### OTP Not Received
+| Symptom | Fix |
+|---------|-----|
+| "SMS_API_KEY is not configured" | Set `SMS_API_KEY` in backend `.env` and restart server |
+| SMS not received, no error | Check `SMS_ENABLED=true` and `SMS_TEST_MODE=false` |
+| Provider returns HTTP 4xx | Verify API key is correct and not revoked |
+| Rate-limit hit | Wait 1 hour, or clear `rateLimitStore` in dev |
 
-1. ✅ Check `SMS_API_KEY` is set correctly
-2. ✅ Verify phone number format (+263...)
-3. ✅ Check backend logs for errors
-4. ✅ Verify SMS provider is working
-5. ✅ Check rate limiting (wait 1 hour)
-
-### SMS Provider Errors
-
-1. ✅ Verify API endpoint URL
-2. ✅ Test provider API directly
-3. ✅ Check API key is valid
-4. ✅ Review provider documentation
-5. ✅ Contact provider support
-
-## Admin Panel Integration
-
-The admin panel already has UI for:
-- ✅ Viewing user OTP
-- ✅ Sending OTP to user
-
-These features now work with the SMS integration. When an admin sends an OTP, it will be delivered via SMS to the user's phone.
-
-## Documentation
-
-Full documentation is available in:
-- **`backend/SMS_INTEGRATION.md`** - Complete SMS integration guide
-- **`backend/.env.example`** - Environment variable template
-
-## Summary
-
-✅ SMS integration complete
-✅ OTP sending via `https://sms.localhost.co.zw`
-✅ Admin OTP management
-✅ Rate limiting and security
-✅ Development mode for testing
-✅ Full documentation
-
-**Next:** Configure your SMS API key and test the integration!
