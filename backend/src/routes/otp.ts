@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, gt } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
+import { sendOTPSMS } from '../utils/sms.js';
 
 // Zimbabwe phone format validation
 const ZIMBABWE_PHONE_REGEX = /^(?:\+263|0)7(?:1|3|7|8)[0-9]{7}$/;
@@ -67,6 +68,7 @@ export function register(app: App, fastify: FastifyInstance) {
               success: { type: 'boolean' },
               message: { type: 'string' },
               expiresIn: { type: 'number' },
+              smsStatus: { type: 'string' },
             },
           },
         },
@@ -132,10 +134,14 @@ export function register(app: App, fastify: FastifyInstance) {
           'OTP generated and stored successfully'
         );
 
+        // Send OTP via SMS
+        const smsResult = await sendOTPSMS(app, normalizedPhone, otp);
+
         return {
           success: true,
-          message: 'OTP sent successfully',
+          message: smsResult.message,
           expiresIn: 300, // 5 minutes in seconds
+          smsStatus: smsResult.status,
         };
       } catch (error) {
         app.logger.error(
@@ -369,6 +375,7 @@ export function register(app: App, fastify: FastifyInstance) {
             properties: {
               success: { type: 'boolean' },
               message: { type: 'string' },
+              smsStatus: { type: 'string' },
             },
           },
         },
@@ -450,9 +457,13 @@ export function register(app: App, fastify: FastifyInstance) {
           'New OTP generated and stored'
         );
 
+        // Send new OTP via SMS
+        const smsResult = await sendOTPSMS(app, normalizedPhone, newOtp);
+
         return {
           success: true,
-          message: 'OTP resent successfully',
+          message: smsResult.message,
+          smsStatus: smsResult.status,
         };
       } catch (error) {
         app.logger.error(

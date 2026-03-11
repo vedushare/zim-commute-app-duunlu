@@ -3,6 +3,10 @@ import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
 import { isAdminUser, isSuperAdmin, logAdminAction } from '../utils/admin.js';
+import { sendOTPSMS } from '../utils/sms.js';
+
+// Sentinel OTP used when an admin triggers a test SMS – easy to spot in logs
+const TEST_SMS_OTP = '000000';
 
 export function register(app: App, fastify: FastifyInstance) {
   const requireAuth = app.requireAuth();
@@ -624,8 +628,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
   // GET /api/admin/audit-logs - Get audit logs
   fastify.get(
-    '/api/admin/audit-logs',
-    {
+    '/api/admin/audit-logs',    {
       schema: {
         description: 'Get audit logs (admin only)',
         tags: ['admin'],
@@ -678,6 +681,169 @@ export function register(app: App, fastify: FastifyInstance) {
           message: 'Failed to fetch audit logs',
         });
       }
+    }
+  );
+
+  // GET /api/admin/sms-config - Get SMS configuration
+  fastify.get(
+    '/api/admin/sms-config',
+    {
+      schema: {
+        description: 'Get SMS configuration (admin only)',
+        tags: ['admin'],
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      app.logger.info({ adminId }, 'Fetching SMS configuration');
+
+      try {
+        const row = await app.db.query.smsConfig.findFirst({
+          where: eq(schema.smsConfig.id, 1),
+        });
+
+        const config = {
+          apiUrl: row?.apiUrl ?? 'https://sms.localhost.co.zw/api/v1/sms/send',
+          // Mask the API key: show only last 4 chars
+          apiKey: row?.apiKey
+            ? '***' + row.apiKey.slice(-4)
+            : '',
+          senderId: row?.senderId ?? 'ZimCommute',
+          enabled: row?.enabled ?? false,
+          testMode: row?.testMode ?? true,
+        };
+
+        return config;
+      } catch (error) {
+        app.logger.error({ err: error, adminId }, 'Failed to fetch SMS config');
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to fetch SMS configuration',
+        });
+      }
+    }
+  );
+
+  // POST /api/admin/sms-config - Create or update SMS configuration
+  fastify.post(
+    '/api/admin/sms-config',
+    {
+      schema: {
+        description: 'Update SMS configuration (admin only)',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          properties: {
+            apiUrl: { type: 'string' },
+            apiKey: { type: 'string' },
+            senderId: { type: 'string' },
+            enabled: { type: 'boolean' },
+            testMode: { type: 'boolean' },
+          },
+          required: ['apiUrl', 'apiKey', 'senderId', 'enabled', 'testMode'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      const { apiUrl, apiKey, senderId, enabled, testMode } = request.body as {
+        apiUrl: string;
+        apiKey: string;
+        senderId: string;
+        enabled: boolean;
+        testMode: boolean;
+      };
+
+      // Don't overwrite the stored key if the caller sent back the masked placeholder
+      const isMasked = apiKey.startsWith('***');
+
+      app.logger.info({ adminId, enabled, testMode }, 'Updating SMS configuration');
+
+      try {
+        const existing = await app.db.query.smsConfig.findFirst({
+          where: eq(schema.smsConfig.id, 1),
+        });
+
+        if (existing) {
+          await app.db
+            .update(schema.smsConfig)
+            .set({
+              apiUrl,
+              ...(isMasked ? {} : { apiKey }),
+              senderId,
+              enabled,
+              testMode,
+            })
+            .where(eq(schema.smsConfig.id, 1));
+        } else {
+          await app.db.insert(schema.smsConfig).values({
+            id: 1,
+            apiUrl,
+            apiKey: isMasked ? '' : apiKey,
+            senderId,
+            enabled,
+            testMode,
+          });
+        }
+
+        await logAdminAction(app, adminId, 'sms_config_updated', 'sms_config', '1', {
+          enabled,
+          testMode,
+        });
+
+        app.logger.info({ adminId }, 'SMS configuration updated successfully');
+
+        return {
+          success: true,
+          message: 'SMS configuration saved successfully.',
+        };
+      } catch (error) {
+        app.logger.error({ err: error, adminId }, 'Failed to update SMS config');
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to save SMS configuration',
+        });
+      }
+    }
+  );
+
+  // POST /api/admin/sms-config/test - Send a test SMS
+  fastify.post(
+    '/api/admin/sms-config/test',
+    {
+      schema: {
+        description: 'Send a test SMS (admin only)',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          properties: {
+            phoneNumber: { type: 'string' },
+          },
+          required: ['phoneNumber'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const adminId = await checkAdmin(request, reply);
+      if (!adminId) return;
+
+      const { phoneNumber } = request.body as { phoneNumber: string };
+
+      app.logger.info({ adminId, phoneNumber }, 'Admin requested test SMS');
+
+      const result = await sendOTPSMS(app, phoneNumber, TEST_SMS_OTP);
+
+      app.logger.info({ adminId, smsStatus: result.status }, 'Test SMS sent');
+
+      return {
+        success: true,
+        message: result.message,
+        smsStatus: result.status,
+      };
     }
   );
 }

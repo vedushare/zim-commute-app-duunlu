@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, timestamp, boolean, integer, decimal, jsonb, foreignKey, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, decimal, jsonb, foreignKey, numeric, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Users table for phone authentication system
@@ -213,3 +214,19 @@ export const routesConfig = pgTable('routes_config', {
   isPopular: boolean('is_popular').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * SMS configuration table (singleton - one row)
+ */
+export const smsConfig = pgTable('sms_config', {
+  id: integer('id').primaryKey().default(1),
+  apiUrl: text('api_url').notNull().default('https://sms.localhost.co.zw/api/v1/sms/send'),
+  apiKey: text('api_key').notNull().default(''),
+  senderId: text('sender_id').notNull().default('ZimCommute'),
+  enabled: boolean('enabled').notNull().default(false),
+  testMode: boolean('test_mode').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  check('sms_config_singleton_check', sql`${table.id} = 1`),
+]);
