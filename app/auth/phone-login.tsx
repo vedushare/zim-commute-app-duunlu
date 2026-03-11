@@ -56,27 +56,76 @@ export default function PhoneLoginScreen() {
       console.log('[PhoneLogin] OTP expires in:', response.expiresIn, 'seconds');
       
       // Check SMS status
-      const smsSuccess = response.smsStatus?.includes('successfully') || response.smsStatus?.includes('sent');
+      const smsStatus = response.smsStatus || '';
       
-      if (smsSuccess) {
+      if (smsStatus === 'sent') {
         // SMS sent successfully
-        setModalTitle('Code Sent');
+        setModalTitle('✅ Code Sent');
         setModalType('success');
         setModalMessage(
           `A 6-digit verification code has been sent to ${formattedPhone} via SMS.\n\n` +
-          'Please check your messages and enter the code on the next screen.'
+          'Please check your messages and enter the code on the next screen.\n\n' +
+          'The code will expire in 5 minutes.'
+        );
+      } else if (smsStatus === 'test_mode') {
+        // Test mode - OTP logged to console
+        setModalTitle('🧪 Test Mode');
+        setModalType('info');
+        setModalMessage(
+          `SMS service is in TEST MODE.\n\n` +
+          `Your verification code has been generated and logged to the backend console.\n\n` +
+          'Check the backend logs for your OTP code, then proceed to enter it on the next screen.\n\n' +
+          'To enable real SMS delivery, go to Admin Panel → Configuration → SMS Configuration and disable Test Mode.'
+        );
+      } else if (smsStatus === 'disabled') {
+        // SMS service disabled
+        setModalTitle('⚠️ SMS Service Disabled');
+        setModalType('info');
+        setModalMessage(
+          `The SMS service is currently disabled.\n\n` +
+          `Your verification code has been generated and logged to the backend console.\n\n` +
+          'To enable SMS delivery:\n' +
+          '1. Go to Admin Panel → Configuration → SMS Configuration\n' +
+          '2. Enable the SMS service\n' +
+          '3. Verify the API configuration\n\n' +
+          'For now, check the backend logs for your OTP code.'
+        );
+      } else if (smsStatus === 'provider_error') {
+        // SMS provider error
+        setModalTitle('⚠️ SMS Delivery Issue');
+        setModalType('error');
+        setModalMessage(
+          `There was an error sending the SMS.\n\n` +
+          `Error: ${response.message}\n\n` +
+          'Your verification code has been generated and logged to the backend console.\n\n' +
+          'Please check:\n' +
+          '1. The SMS provider API is accessible\n' +
+          '2. The API key is valid\n' +
+          '3. The phone number format is correct\n\n' +
+          'Check the backend logs for your OTP code.'
+        );
+      } else if (smsStatus === 'connection_error') {
+        // Connection error
+        setModalTitle('❌ Connection Error');
+        setModalType('error');
+        setModalMessage(
+          `Unable to connect to the SMS provider.\n\n` +
+          `Error: ${response.message}\n\n` +
+          'Your verification code has been generated and logged to the backend console.\n\n' +
+          'Please check:\n' +
+          '1. The SMS provider URL is correct\n' +
+          '2. The SMS provider service is online\n' +
+          '3. Network connectivity\n\n' +
+          'Check the backend logs for your OTP code.'
         );
       } else {
-        // SMS failed but OTP is stored
-        setModalTitle('OTP Generated');
+        // Unknown status
+        setModalTitle('ℹ️ OTP Generated');
         setModalType('info');
         setModalMessage(
           `Your verification code has been generated.\n\n` +
-          `SMS Status: ${response.smsStatus}\n\n` +
-          'If you don\'t receive the SMS:\n\n' +
-          '1. Check the SMS configuration in Admin Panel\n' +
-          '2. Check backend logs for the OTP code\n' +
-          '3. Contact support for assistance\n\n' +
+          `Status: ${smsStatus || 'Unknown'}\n\n` +
+          'If you don\'t receive the SMS, check the backend logs for your OTP code.\n\n' +
           'You can proceed to enter the code on the next screen.'
         );
       }
@@ -88,7 +137,7 @@ export default function PhoneLoginScreen() {
       
       // Check if it's a network error
       if (errorMsg.includes('connect') || errorMsg.includes('network') || errorMsg.includes('fetch')) {
-        setModalTitle('Connection Error');
+        setModalTitle('❌ Connection Error');
         setModalType('error');
         setModalMessage(
           'Unable to connect to the server. Please check:\n\n' +
@@ -98,7 +147,7 @@ export default function PhoneLoginScreen() {
           'Please try again once the connection is restored.'
         );
       } else if (errorMsg.includes('429') || errorMsg.includes('Too many')) {
-        setModalTitle('Rate Limit Exceeded');
+        setModalTitle('⏱️ Rate Limit Exceeded');
         setModalType('error');
         setModalMessage(
           'You have requested too many OTP codes.\n\n' +
@@ -106,7 +155,7 @@ export default function PhoneLoginScreen() {
           'This limit helps protect against abuse.'
         );
       } else {
-        setModalTitle('Error');
+        setModalTitle('❌ Error');
         setModalType('error');
         setModalMessage(errorMsg);
       }
@@ -122,7 +171,7 @@ export default function PhoneLoginScreen() {
     setShowModal(false);
     
     // Only navigate if it's not a connection error or rate limit error
-    if (modalType !== 'error') {
+    if (modalType !== 'error' || modalTitle.includes('SMS')) {
       router.push({
         pathname: '/auth/verify-otp',
         params: { phoneNumber: formatPhoneNumber(phoneNumber) },
