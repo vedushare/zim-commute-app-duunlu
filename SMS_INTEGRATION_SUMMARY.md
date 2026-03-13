@@ -39,10 +39,10 @@ I've successfully integrated the SMS provider `https://sms.localhost.co.zw` for 
 
 ### Environment Variables
 
-Add these to your backend `.env` file:
+Add these to your backend `.env` file (or set in Vercel — see `VERCEL_ENV_SETUP.md`):
 
 ```bash
-SMS_PROVIDER_URL=https://sms.localhost.co.zw/api/send
+SMS_API_URL=https://sms.localhost.co.zw/api/v1/sms/send
 SMS_API_KEY=your_api_key_here
 SMS_SENDER_ID=ZimCommute
 ```
@@ -141,8 +141,8 @@ curl -X POST http://localhost:3000/api/otp/verify \
    - Obtain your API key
 
 2. **Configure Environment:**
-   - Add `SMS_API_KEY` to your `.env` file
-   - Verify `SMS_PROVIDER_URL` is correct
+   - Add `SMS_API_KEY` to your `.env` file (or Vercel dashboard — see `VERCEL_ENV_SETUP.md`)
+   - Verify `SMS_API_URL` is correct
    - Set `SMS_SENDER_ID` (default: "ZimCommute")
 
 3. **Test in Production:**

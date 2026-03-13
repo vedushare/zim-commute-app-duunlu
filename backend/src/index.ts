@@ -16,6 +16,7 @@ import { register as registerAdminUsersRoutes } from './routes/admin-users.js';
 import { register as registerAdminRidesRoutes } from './routes/admin-rides.js';
 import { register as registerAdminConfigRoutes } from './routes/admin-config.js';
 import { register as registerAdminModerationRoutes } from './routes/admin-moderation.js';
+import { validateSMSEnv } from './utils/sms.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -46,5 +47,7 @@ registerAdminRidesRoutes(app, app.fastify);
 registerAdminConfigRoutes(app, app.fastify);
 registerAdminModerationRoutes(app, app.fastify);
 
+// Validate SMS environment variables and log guidance if any are missing
+validateSMSEnv();
 await app.run();
 app.logger.info('Application running with phone authentication, ride-sharing, trust & safety, and admin features');
