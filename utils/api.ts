@@ -15,9 +15,7 @@ import { Platform } from 'react-native';
 // Get backend URL from app.json configuration
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
 
-// Supabase Edge Function URL for OTP (bypasses Specular SMS code which has the
-// "The requested application does not exist" error from the SMS provider).
-// The edge function calls sms.localhost.co.zw without the invalid senderId field.
+// Supabase Edge Function URL for OTP
 const SUPABASE_OTP_URL = 'https://sbayoiscitldgmfwueld.supabase.co/functions/v1/otp';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNiYXlvaXNjaXRsZGdtZnd1ZWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Mzc2MjksImV4cCI6MjA4NjExMzYyOX0.RspgJLYEbUzaRLh65Kqynbjmfsz-Po-sbLbFt6jf6IM';
 
@@ -146,12 +144,21 @@ async function apiCall<T>(
 
 /**
  * Direct call to Supabase Edge Function for OTP operations.
- * This bypasses the Specular backend SMS code which was sending an invalid
- * `senderId` field to sms.localhost.co.zw, causing "The requested application
- * does not exist" errors. The edge function omits the senderId and calls the
- * SMS provider correctly using only the apiKey + recipient + message.
+ *
+ * For /send and /resend: the edge function always stores the OTP first, then
+ * attempts SMS delivery. If SMS fails it returns { success: false, smsStatus, smsError }
+ * with HTTP 200. We must NOT throw in that case — the OTP is still valid and the
+ * user should proceed to the verify screen. We return the response body as-is so
+ * the caller can inspect smsStatus and show the appropriate message.
+ *
+ * For /verify: a success:false response is a real failure (wrong code, expired, etc.)
+ * and should throw so the caller can surface the error.
  */
-async function otpEdgeCall<T>(path: string, data: Record<string, string>): Promise<T> {
+async function otpEdgeCall<T>(
+  path: string,
+  data: Record<string, string>,
+  throwOnFailure = false
+): Promise<T> {
   const url = `${SUPABASE_OTP_URL}${path}`;
   console.log(`[OTP] POST ${url}`);
 
@@ -169,15 +176,21 @@ async function otpEdgeCall<T>(path: string, data: Record<string, string>): Promi
 
     const responseData = await response.json();
 
+    // Hard HTTP errors (4xx/5xx) always throw
     if (!response.ok) {
-      console.error('[OTP] Error response:', responseData);
+      console.error('[OTP] HTTP error response:', responseData);
       if (response.status === 429) {
         throw new Error(responseData.message || 'Too many OTP requests. Please wait before trying again.');
       }
       throw new Error(responseData.message || responseData.error || `OTP request failed with status ${response.status}`);
     }
 
-    console.log('[OTP] Request successful');
+    // For verify endpoint, a success:false in the body is a real error
+    if (throwOnFailure && responseData.success === false) {
+      throw new Error(responseData.message || 'OTP verification failed');
+    }
+
+    console.log('[OTP] Request completed, smsStatus:', responseData.smsStatus);
     return responseData as T;
   } catch (error: any) {
     console.error('[OTP] Request failed:', error.message);
@@ -316,8 +329,9 @@ export async function authenticatedUpload<T>(
 export interface SendOTPResponse {
   success: boolean;
   message: string;
-  expiresIn: number;
+  expiresIn?: number;
   smsStatus?: string;
+  smsError?: string;
 }
 
 export interface VerifyOTPResponse {
@@ -375,15 +389,17 @@ export interface UploadIDResponse {
   verificationLevel: string;
 }
 
-// OTP API — routed through Supabase Edge Function to fix SMS provider error
+// OTP API — routed through Supabase Edge Function
+// send/resend: do NOT throw on SMS failure (OTP is still stored, user can proceed)
+// verify: throw on failure (wrong code / expired)
 export const sendOTP = (phoneNumber: string) =>
-  otpEdgeCall<SendOTPResponse>('/send', { phoneNumber });
+  otpEdgeCall<SendOTPResponse>('/send', { phoneNumber }, false);
 
 export const verifyOTP = (phoneNumber: string, otp: string) =>
-  otpEdgeCall<VerifyOTPResponse>('/verify', { phoneNumber, otp });
+  otpEdgeCall<VerifyOTPResponse>('/verify', { phoneNumber, otp }, true);
 
 export const resendOTP = (phoneNumber: string) =>
-  otpEdgeCall<SendOTPResponse>('/resend', { phoneNumber });
+  otpEdgeCall<SendOTPResponse>('/resend', { phoneNumber }, false);
 
 // User API
 export const getCurrentUser = () =>
