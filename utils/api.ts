@@ -15,6 +15,12 @@ import { Platform } from 'react-native';
 // Get backend URL from app.json configuration
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
 
+// Supabase Edge Function URL for OTP (bypasses Specular SMS code which has the
+// "The requested application does not exist" error from the SMS provider).
+// The edge function calls sms.localhost.co.zw without the invalid senderId field.
+const SUPABASE_OTP_URL = 'https://sbayoiscitldgmfwueld.supabase.co/functions/v1/otp';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNiYXlvaXNjaXRsZGdtZnd1ZWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Mzc2MjksImV4cCI6MjA4NjExMzYyOX0.RspgJLYEbUzaRLh65Kqynbjmfsz-Po-sbLbFt6jf6IM';
+
 console.log('[API] Backend URL configured:', BACKEND_URL);
 
 const TOKEN_KEY = 'zimcommute_auth_token';
@@ -98,9 +104,8 @@ async function apiCall<T>(
       const text = await response.text();
       console.error('[API] Non-JSON response:', text);
       
-      // Check if it's a 404 error
       if (response.status === 404) {
-        throw new Error('The requested application does not exist. Please check the backend URL configuration.');
+        throw new Error('The requested resource does not exist.');
       }
       
       throw new Error('Invalid response format from server');
@@ -111,7 +116,6 @@ async function apiCall<T>(
     if (!response.ok) {
       console.error('[API] Error response:', data);
       
-      // Provide more specific error messages
       if (response.status === 404) {
         throw new Error(data.message || 'The requested resource does not exist');
       } else if (response.status === 429) {
@@ -128,17 +132,59 @@ async function apiCall<T>(
   } catch (error: any) {
     console.error('[API] Request failed:', error.message);
     
-    // Provide user-friendly error messages
     if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
       throw new Error('Unable to connect to server. Please check your internet connection and ensure the backend is running.');
     }
     
-    // If it's already a formatted error, pass it through
     if (error.message) {
       throw error;
     }
     
     throw new Error('An unexpected error occurred. Please try again.');
+  }
+}
+
+/**
+ * Direct call to Supabase Edge Function for OTP operations.
+ * This bypasses the Specular backend SMS code which was sending an invalid
+ * `senderId` field to sms.localhost.co.zw, causing "The requested application
+ * does not exist" errors. The edge function omits the senderId and calls the
+ * SMS provider correctly using only the apiKey + recipient + message.
+ */
+async function otpEdgeCall<T>(path: string, data: Record<string, string>): Promise<T> {
+  const url = `${SUPABASE_OTP_URL}${path}`;
+  console.log(`[OTP] POST ${url}`);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(data),
+    });
+
+    console.log(`[OTP] Response status: ${response.status}`);
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error('[OTP] Error response:', responseData);
+      if (response.status === 429) {
+        throw new Error(responseData.message || 'Too many OTP requests. Please wait before trying again.');
+      }
+      throw new Error(responseData.message || responseData.error || `OTP request failed with status ${response.status}`);
+    }
+
+    console.log('[OTP] Request successful');
+    return responseData as T;
+  } catch (error: any) {
+    console.error('[OTP] Request failed:', error.message);
+    if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
+      throw new Error('Unable to connect to server. Please check your internet connection.');
+    }
+    throw error;
   }
 }
 
@@ -192,12 +238,11 @@ export async function authenticatedPut<T>(endpoint: string, data?: any): Promise
 }
 
 export async function authenticatedDelete<T>(endpoint: string): Promise<T> {
-  // DELETE requests should not have Content-Type header if no body
   return apiCall<T>(
     endpoint, 
     { 
       method: 'DELETE',
-      headers: {} // Remove Content-Type header for DELETE
+      headers: {}
     }, 
     true
   );
@@ -226,14 +271,11 @@ export async function authenticatedUpload<T>(
 
   const formData = new FormData();
   
-  // Handle file upload differently for web vs native
   if (Platform.OS === 'web') {
-    // For web, we need to fetch the blob first
     const response = await fetch(file.uri);
     const blob = await response.blob();
     formData.append(fieldName, blob, file.name);
   } else {
-    // For native, use the file object directly
     formData.append(fieldName, {
       uri: file.uri,
       name: file.name,
@@ -246,7 +288,6 @@ export async function authenticatedUpload<T>(
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        // Don't set Content-Type for FormData - browser/native will set it with boundary
       },
       body: formData,
     });
@@ -281,6 +322,7 @@ export interface SendOTPResponse {
 
 export interface VerifyOTPResponse {
   success: boolean;
+  token?: string;
   user: {
     id: string;
     phoneNumber: string;
@@ -333,15 +375,15 @@ export interface UploadIDResponse {
   verificationLevel: string;
 }
 
-// OTP API
+// OTP API — routed through Supabase Edge Function to fix SMS provider error
 export const sendOTP = (phoneNumber: string) =>
-  apiPost<SendOTPResponse>('/api/otp/send', { phoneNumber });
+  otpEdgeCall<SendOTPResponse>('/send', { phoneNumber });
 
 export const verifyOTP = (phoneNumber: string, otp: string) =>
-  apiPost<VerifyOTPResponse>('/api/otp/verify', { phoneNumber, otp });
+  otpEdgeCall<VerifyOTPResponse>('/verify', { phoneNumber, otp });
 
 export const resendOTP = (phoneNumber: string) =>
-  apiPost<SendOTPResponse>('/api/otp/resend', { phoneNumber });
+  otpEdgeCall<SendOTPResponse>('/resend', { phoneNumber });
 
 // User API
 export const getCurrentUser = () =>
