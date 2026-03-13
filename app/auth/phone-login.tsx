@@ -27,6 +27,7 @@ export default function PhoneLoginScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
   const [modalType, setModalType] = useState<'success' | 'error' | 'info'>('info');
+  const [navigateOnClose, setNavigateOnClose] = useState(false);
 
   const handlePhoneChange = (text: string) => {
     setPhoneNumber(text);
@@ -65,7 +66,7 @@ export default function PhoneLoginScreen() {
         setModalMessage(
           `A 6-digit verification code has been sent to ${formattedPhone} via SMS.\n\n` +
           'Please check your messages and enter the code on the next screen.\n\n' +
-          'The code will expire in 5 minutes.'
+          'The code will expire in 10 minutes.'
         );
       } else if (smsStatus === 'test_mode') {
         // Test mode - OTP logged to console
@@ -130,10 +131,13 @@ export default function PhoneLoginScreen() {
         );
       }
       
+      // OTP was generated for all smsStatus cases; proceed to verify screen on modal close
+      setNavigateOnClose(true);
       setShowModal(true);
     } catch (err: any) {
       console.error('[PhoneLogin] Error sending OTP:', err);
       const errorMsg = err.message || 'Failed to send OTP. Please try again.';
+      setNavigateOnClose(false);
       
       // Check if it's a network error
       if (errorMsg.includes('connect') || errorMsg.includes('network') || errorMsg.includes('fetch')) {
@@ -151,7 +155,7 @@ export default function PhoneLoginScreen() {
         setModalType('error');
         setModalMessage(
           'You have requested too many OTP codes.\n\n' +
-          'Please wait 1 hour before trying again.\n\n' +
+          'Please wait 10 minutes before trying again.\n\n' +
           'This limit helps protect against abuse.'
         );
       } else {
@@ -170,8 +174,7 @@ export default function PhoneLoginScreen() {
   const handleModalClose = () => {
     setShowModal(false);
     
-    // Only navigate if it's not a connection error or rate limit error
-    if (modalType !== 'error' || modalTitle.includes('SMS')) {
+    if (navigateOnClose) {
       router.push({
         pathname: '/auth/verify-otp',
         params: { phoneNumber: formatPhoneNumber(phoneNumber) },
