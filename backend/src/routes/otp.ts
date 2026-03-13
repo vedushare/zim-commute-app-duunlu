@@ -6,9 +6,49 @@ import { sendOTPSMS } from '../utils/sms.js';
 
 const OTP_EXPIRATION_MS = 10 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 3;
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function checkRateLimit(app: App, phoneNumber: string): Promise<boolean> {
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
+  const recent = await app.db.query.otpVerifications.findMany({
+    where: and(
+      eq(schema.otpVerifications.phoneNumber, phoneNumber),
+      gt(schema.otpVerifications.createdAt, windowStart)
+    ),
+  });
+  return recent.length >= RATE_LIMIT_MAX;
+}
+
+async function invalidatePreviousOTPs(app: App, phoneNumber: string): Promise<void> {
+  await app.db
+    .update(schema.otpVerifications)
+    .set({ expiresAt: new Date() })
+    .where(
+      and(
+        eq(schema.otpVerifications.phoneNumber, phoneNumber),
+        eq(schema.otpVerifications.verified, false),
+        gt(schema.otpVerifications.expiresAt, new Date())
+      )
+    );
+}
+
+async function sendAndGetStatus(otp: string, phoneNumber: string): Promise<{ smsStatus: 'sent' | 'disabled' | 'test_mode' | 'provider_error' | 'connection_error'; message: string }> {
+  try {
+    const status = await sendOTPSMS(otp, phoneNumber);
+    return { smsStatus: status, message: 'OTP sent' };
+  } catch (err) {
+    console.error('[OTP] Failed to send SMS:', err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.toLowerCase().includes('connect')) {
+      return { smsStatus: 'connection_error', message: errMsg };
+    }
+    return { smsStatus: 'provider_error', message: errMsg };
+  }
 }
 
 export function register(app: App, fastify: FastifyInstance) {
@@ -22,6 +62,12 @@ export function register(app: App, fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, message: 'Phone number is required' });
       }
 
+      if (await checkRateLimit(app, phoneNumber)) {
+        return reply.status(429).send({ success: false, message: 'Too many OTP requests. Please wait before trying again.' });
+      }
+
+      await invalidatePreviousOTPs(app, phoneNumber);
+
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS);
 
@@ -31,13 +77,9 @@ export function register(app: App, fastify: FastifyInstance) {
         expiresAt,
       });
 
-      try {
-        await sendOTPSMS(otp, phoneNumber);
-      } catch (err) {
-        console.error('[OTP] Failed to send SMS:', err);
-      }
+      const { smsStatus, message } = await sendAndGetStatus(otp, phoneNumber);
 
-      return { success: true, message: 'OTP sent' };
+      return { success: true, message, smsStatus, expiresIn: OTP_EXPIRATION_MS / 1000 };
     }
   );
 
@@ -102,6 +144,12 @@ export function register(app: App, fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, message: 'Phone number is required' });
       }
 
+      if (await checkRateLimit(app, phoneNumber)) {
+        return reply.status(429).send({ success: false, message: 'Too many OTP requests. Please wait before trying again.' });
+      }
+
+      await invalidatePreviousOTPs(app, phoneNumber);
+
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS);
 
@@ -111,13 +159,9 @@ export function register(app: App, fastify: FastifyInstance) {
         expiresAt,
       });
 
-      try {
-        await sendOTPSMS(otp, phoneNumber);
-      } catch (err) {
-        console.error('[OTP] Failed to send SMS:', err);
-      }
+      const { smsStatus, message } = await sendAndGetStatus(otp, phoneNumber);
 
-      return { success: true, message: 'OTP resent' };
+      return { success: true, message, smsStatus, expiresIn: OTP_EXPIRATION_MS / 1000 };
     }
   );
 }

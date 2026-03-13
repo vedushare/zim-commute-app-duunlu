@@ -137,7 +137,7 @@ export default function SMSConfigScreen() {
   const [testing, setTesting] = useState(false);
   const [config, setConfig] = useState<SMSConfig>({
     apiUrl: 'https://sms.localhost.co.zw/api/v1/sms/send',
-    apiKey: '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
+    apiKey: '',
     senderId: 'ZimCommute',
     enabled: true,
     testMode: false,
@@ -161,7 +161,7 @@ export default function SMSConfigScreen() {
       const data = await getSMSConfig();
       setConfig({
         apiUrl: data.apiUrl || 'https://sms.localhost.co.zw/api/v1/sms/send',
-        apiKey: data.apiKey || '0ecbffe66f647b6e6883dc98374958f2f5c194758907bcbc',
+        apiKey: data.apiKey || '',
         senderId: data.senderId || 'ZimCommute',
         enabled: data.enabled !== undefined ? data.enabled : true,
         testMode: data.testMode !== undefined ? data.testMode : false,
@@ -325,7 +325,7 @@ export default function SMSConfigScreen() {
             autoCorrect={false}
           />
           <Text style={styles.helpText}>
-            Your API key from sms.localhost.co.zw (pre-configured)
+            Your API key from sms.localhost.co.zw
           </Text>
 
           <Text style={styles.label}>Sender ID</Text>
