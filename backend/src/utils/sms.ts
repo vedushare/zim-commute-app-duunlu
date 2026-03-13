@@ -25,7 +25,7 @@ export async function sendOTPSMS(otp: string, phoneNumber: string): Promise<'sen
   }
 
   const apiUrl = process.env.SMS_API_URL ?? 'https://sms.localhost.co.zw/api/v1/sms/send';
-  const senderId = process.env.SMS_SENDER_ID ?? 'ZimCommute';
+  const sender = process.env.SMS_SENDER_ID ?? 'ZimCommute';
   const message = `Your ZimCommute verification code is: ${otp}. It expires in 10 minutes.`;
 
   let response: Response;
@@ -33,7 +33,7 @@ export async function sendOTPSMS(otp: string, phoneNumber: string): Promise<'sen
     response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, senderId, recipient: phoneNumber, message }),
+      body: JSON.stringify({ apiKey, sender, to: phoneNumber, message }),
     });
   } catch (err) {
     throw new Error(`Failed to connect to SMS provider: ${err instanceof Error ? err.message : String(err)}`);
