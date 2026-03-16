@@ -195,7 +195,7 @@ export default function PhoneLoginScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.flag}>🇿🇼</Text>
-            <Text style={styles.title}>Welcome to ZimCommute</Text>
+            <Text style={styles.title}>Welcome to Zimcommute</Text>
             <Text style={styles.subtitle}>
               Connecting Zimbabwe, One Ride at a Time
             </Text>
