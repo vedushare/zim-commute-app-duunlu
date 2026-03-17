@@ -65,7 +65,7 @@ export default function PhoneLoginScreen() {
         setModalMessage(
           `A 6-digit verification code has been sent to ${formattedPhone} via SMS.\n\n` +
           'Please check your messages and enter the code on the next screen.\n\n' +
-          'The code will expire in 5 minutes.'
+          'The code will expire in 10 minutes.'
         );
       } else if (smsStatus === 'test_mode') {
         // Test mode - OTP logged to console
@@ -169,13 +169,23 @@ export default function PhoneLoginScreen() {
 
   const handleModalClose = () => {
     setShowModal(false);
-    
-    // Only navigate if it's not a connection error or rate limit error
-    if (modalType !== 'error' || modalTitle.includes('SMS')) {
+
+    // Block navigation only when no OTP was generated at all:
+    // - Rate limit exceeded (backend rejected the request before storing an OTP)
+    // - Connection error reaching the backend itself (no OTP stored)
+    // All other cases (SMS sent, test_mode, disabled, provider_error, network_error
+    // to the SMS provider) mean the OTP was generated and stored — navigate to verify.
+    const isHardFailure =
+      modalTitle.includes('Rate Limit') || modalTitle.includes('Connection Error');
+
+    if (!isHardFailure) {
+      console.log('[PhoneLogin] Navigating to verify-otp after modal close');
       router.push({
         pathname: '/auth/verify-otp',
         params: { phoneNumber: formatPhoneNumber(phoneNumber) },
       });
+    } else {
+      console.log('[PhoneLogin] Hard failure — staying on phone-login screen:', modalTitle);
     }
   };
 

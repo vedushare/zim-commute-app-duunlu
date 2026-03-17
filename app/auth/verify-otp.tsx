@@ -78,8 +78,8 @@ export default function VerifyOTPScreen() {
       console.log('[VerifyOTP] OTP verified successfully');
       console.log('[VerifyOTP] User data:', response.user);
       
-      const tempToken = `user_${response.user.id}`;
-      
+      const token = response.token || `user_${response.user.id}`;
+
       const user: User = {
         id: response.user.id,
         phoneNumber: response.user.phoneNumber,
@@ -97,15 +97,17 @@ export default function VerifyOTPScreen() {
       };
       
       console.log('[VerifyOTP] Logging in user');
-      await login(tempToken, user);
-      
+      await login(token, user);
+
       const isProfileComplete = user.fullName && user.userType && user.homeCity;
-      
+
       if (isProfileComplete) {
         console.log('[VerifyOTP] Profile complete, navigating to home');
+        isVerifyingRef.current = false;
         router.replace('/(tabs)/(home)');
       } else {
         console.log('[VerifyOTP] Profile incomplete, navigating to profile setup');
+        isVerifyingRef.current = false;
         router.replace('/auth/profile-setup');
       }
     } catch (err: any) {
