@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,6 +25,9 @@ export default function VerifyOTPScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // Guard against double-submit (auto-submit on 6 digits + manual tap race)
+  const isVerifyingRef = useRef(false);
 
   // Countdown timer for resend
   useEffect(() => {
@@ -59,6 +62,12 @@ export default function VerifyOTPScreen() {
       return;
     }
 
+    // Prevent concurrent verify calls (auto-submit + manual tap race)
+    if (isVerifyingRef.current) {
+      return;
+    }
+    isVerifyingRef.current = true;
+
     console.log('[VerifyOTP] User verifying OTP:', codeToVerify, 'for phone:', phoneNumber);
     setIsLoading(true);
     setError('');
@@ -69,11 +78,8 @@ export default function VerifyOTPScreen() {
       console.log('[VerifyOTP] OTP verified successfully');
       console.log('[VerifyOTP] User data:', response.user);
       
-      // Note: The backend doesn't return a token in the response
-      // We'll use the user ID as a temporary token until proper JWT is implemented
       const tempToken = `user_${response.user.id}`;
       
-      // Convert backend user to our User type
       const user: User = {
         id: response.user.id,
         phoneNumber: response.user.phoneNumber,
@@ -93,7 +99,6 @@ export default function VerifyOTPScreen() {
       console.log('[VerifyOTP] Logging in user');
       await login(tempToken, user);
       
-      // Navigate to profile setup if profile is incomplete, otherwise go to home
       const isProfileComplete = user.fullName && user.userType && user.homeCity;
       
       if (isProfileComplete) {
@@ -109,6 +114,8 @@ export default function VerifyOTPScreen() {
       setError(message);
       setErrorMessage(message);
       setShowErrorModal(true);
+      // Release the lock on failure so the user can retry
+      isVerifyingRef.current = false;
     } finally {
       setIsLoading(false);
     }
@@ -123,6 +130,8 @@ export default function VerifyOTPScreen() {
     console.log('[VerifyOTP] User tapped Resend OTP for phone:', phoneNumber);
     setIsResending(true);
     setError('');
+    // Reset the verify lock so the fresh OTP can be submitted
+    isVerifyingRef.current = false;
 
     try {
       const response = await resendOTP(phoneNumber);
@@ -132,7 +141,6 @@ export default function VerifyOTPScreen() {
       setCanResend(false);
       setOtp('');
       
-      // Show success message
       setShowSuccessModal(true);
     } catch (err: any) {
       console.error('[VerifyOTP] Error resending OTP:', err);
