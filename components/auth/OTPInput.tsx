@@ -103,7 +103,7 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
               keyboardType="number-pad"
               maxLength={1}
               autoComplete={isFirstInput ? 'sms-otp' : 'off'}
-              textContentType={Platform.OS === 'ios' && isFirstInput ? 'oneTimeCode' : undefined}
+              {...(Platform.OS === 'ios' && isFirstInput ? { textContentType: 'oneTimeCode' } : {})}
             />
           );
         })}
