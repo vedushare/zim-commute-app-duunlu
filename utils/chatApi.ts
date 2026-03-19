@@ -84,8 +84,8 @@ export async function getChatRooms(): Promise<ChatRoom[]> {
     }
     // Count messages from others that haven't been read yet
     if (userId && msg.sender_id !== userId && msg.read_at === null) {
-      const room = roomMap.get(msg.ride_id)!;
-      room.unread_count += 1;
+      const room = roomMap.get(msg.ride_id);
+      if (room) room.unread_count += 1;
     }
   }
 

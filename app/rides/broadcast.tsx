@@ -183,11 +183,11 @@ export default function BroadcastScreen() {
       const R = 6_371_000;
       const dLat = ((lat - last.lat) * Math.PI) / 180;
       const dLng = ((lng - last.lng) * Math.PI) / 180;
+      const cosLastLat = Math.cos((last.lat * Math.PI) / 180);
+      const cosLat = Math.cos((lat * Math.PI) / 180);
       const a =
         Math.sin(dLat / 2) ** 2 +
-        Math.cos((last.lat * Math.PI) / 180) *
-          Math.cos((lat * Math.PI) / 180) *
-          Math.sin(dLng / 2) ** 2;
+        cosLastLat * cosLat * Math.sin(dLng / 2) ** 2;
       const distMetres = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
       return distMetres >= MIN_DISTANCE_METRES;

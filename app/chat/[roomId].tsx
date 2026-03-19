@@ -273,11 +273,13 @@ export default function ChatRoomScreen() {
           });
           // Mark incoming messages from others as read
           if (msg.sender_id !== user?.id) {
-            supabase
+            void supabase
               .from('messages')
               .update({ read_at: new Date().toISOString() })
               .eq('id', msg.id)
-              .then(() => {});
+              .then(({ error }) => {
+                if (error) console.warn('[ChatRoom] Failed to mark message read:', error.message);
+              });
           }
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
