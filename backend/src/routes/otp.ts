@@ -7,6 +7,7 @@ import type { App } from '../index.js';
 import { sendOTPSMS } from '../utils/sms.js';
 
 const OTP_EXPIRATION_MS = 10 * 60 * 1000;
+const OTP_EXPIRATION_SECONDS = OTP_EXPIRATION_MS / 1000;
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_RATE_LIMIT = 3;
 const OTP_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -60,6 +61,18 @@ export function register(app: App, fastify: FastifyInstance) {
         return reply.status(429).send({ success: false, message: 'Too many OTP requests. Please try again later.' });
       }
 
+      // Expire any existing unverified OTPs for this phone before creating a new one
+      await app.db
+        .update(schema.otpVerifications)
+        .set({ expiresAt: new Date() })
+        .where(
+          and(
+            eq(schema.otpVerifications.phoneNumber, phoneNumber),
+            eq(schema.otpVerifications.verified, false),
+            gt(schema.otpVerifications.expiresAt, new Date())
+          )
+        );
+
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS);
 
@@ -70,13 +83,18 @@ export function register(app: App, fastify: FastifyInstance) {
         expiresAt,
       });
 
+      let smsStatus: 'sent' | 'disabled' | 'test_mode' | 'connection_error' | 'provider_error';
+      let message = 'OTP sent';
       try {
-        await sendOTPSMS(otp, phoneNumber);
+        smsStatus = await sendOTPSMS(otp, phoneNumber);
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         console.error('[OTP] Failed to send SMS:', err);
+        smsStatus = errMsg.toLowerCase().includes('connect') ? 'connection_error' : 'provider_error';
+        message = errMsg;
       }
 
-      return { success: true, message: 'OTP sent' };
+      return { success: true, message, smsStatus, expiresIn: OTP_EXPIRATION_SECONDS };
     }
   );
 
@@ -203,6 +221,18 @@ export function register(app: App, fastify: FastifyInstance) {
         return reply.status(429).send({ success: false, message: 'Too many OTP requests. Please try again later.' });
       }
 
+      // Expire any existing unverified OTPs for this phone before creating a new one
+      await app.db
+        .update(schema.otpVerifications)
+        .set({ expiresAt: new Date() })
+        .where(
+          and(
+            eq(schema.otpVerifications.phoneNumber, phoneNumber),
+            eq(schema.otpVerifications.verified, false),
+            gt(schema.otpVerifications.expiresAt, new Date())
+          )
+        );
+
       const otp = generateOTP();
       const expiresAt = new Date(Date.now() + OTP_EXPIRATION_MS);
 
@@ -213,13 +243,18 @@ export function register(app: App, fastify: FastifyInstance) {
         expiresAt,
       });
 
+      let smsStatus: 'sent' | 'disabled' | 'test_mode' | 'connection_error' | 'provider_error';
+      let message = 'OTP resent';
       try {
-        await sendOTPSMS(otp, phoneNumber);
+        smsStatus = await sendOTPSMS(otp, phoneNumber);
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         console.error('[OTP] Failed to send SMS:', err);
+        smsStatus = errMsg.toLowerCase().includes('connect') ? 'connection_error' : 'provider_error';
+        message = errMsg;
       }
 
-      return { success: true, message: 'OTP resent' };
+      return { success: true, message, smsStatus, expiresIn: OTP_EXPIRATION_SECONDS };
     }
   );
 }
