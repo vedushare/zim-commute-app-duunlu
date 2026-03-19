@@ -9,7 +9,7 @@
  */
 
 import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/utils/secureStorePolyfill';
 import { Platform } from 'react-native';
 
 // Get backend URL from app.json configuration
@@ -28,7 +28,7 @@ const TOKEN_KEY = 'zimcommute_auth_token';
  */
 export async function getAuthToken(): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(TOKEN_KEY);
+    return await secureStorage.getItemAsync(TOKEN_KEY);
   } catch (error) {
     console.error('[API] Error getting auth token:', error);
     return null;
@@ -40,7 +40,7 @@ export async function getAuthToken(): Promise<string | null> {
  */
 export async function setAuthToken(token: string): Promise<void> {
   try {
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    await secureStorage.setItemAsync(TOKEN_KEY, token);
     console.log('[API] Auth token stored successfully');
   } catch (error) {
     console.error('[API] Error storing auth token:', error);
@@ -53,7 +53,7 @@ export async function setAuthToken(token: string): Promise<void> {
  */
 export async function clearAuthToken(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await secureStorage.deleteItemAsync(TOKEN_KEY);
     console.log('[API] Auth token cleared');
   } catch (error) {
     console.error('[API] Error clearing auth token:', error);

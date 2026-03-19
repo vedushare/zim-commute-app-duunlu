@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/utils/secureStorePolyfill';
 import { User, AuthState } from '@/types/auth';
 
 interface AuthContextType extends AuthState {
@@ -32,8 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadStoredAuth = async () => {
     console.log('AuthContext: Loading stored auth data');
     try {
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
-      const userJson = await SecureStore.getItemAsync(USER_KEY);
+      const token = await secureStorage.getItemAsync(TOKEN_KEY);
+      const userJson = await secureStorage.getItemAsync(USER_KEY);
       
       if (token && userJson) {
         const user = JSON.parse(userJson) as User;
@@ -70,8 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (token: string, user: User) => {
     console.log('AuthContext: Logging in user:', user.phoneNumber);
     try {
-      await SecureStore.setItemAsync(TOKEN_KEY, token);
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+      await secureStorage.setItemAsync(TOKEN_KEY, token);
+      await secureStorage.setItemAsync(USER_KEY, JSON.stringify(user));
       
       setState({
         isLoading: false,
@@ -90,8 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     console.log('AuthContext: Logging out user');
     try {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
-      await SecureStore.deleteItemAsync(USER_KEY);
+      await secureStorage.deleteItemAsync(TOKEN_KEY);
+      await secureStorage.deleteItemAsync(USER_KEY);
       
       setState({
         isLoading: false,
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
     }));
     // Also update stored user data
-    SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)).catch(error => {
+    secureStorage.setItemAsync(USER_KEY, JSON.stringify(user)).catch(error => {
       console.error('AuthContext: Error updating stored user:', error);
     });
   };

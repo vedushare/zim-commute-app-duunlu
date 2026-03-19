@@ -1,19 +1,31 @@
 /**
- * Polyfill for old expo-secure-store API used by @better-auth/expo internals.
- * expo-secure-store v14+ renamed these methods:
- *   setValueWithKeyAsync    → setItemAsync
- *   getValueWithKeyAsync    → getItemAsync
- *   removeValueWithKeyAsync → deleteItemAsync
+ * Storage adapter for @better-auth/expo and any code that needs the old
+ * expo-secure-store API names.
  *
- * On web, expo-secure-store is a no-op stub and setItemAsync may not exist.
- * We provide a localStorage-backed fallback for web so auth works in the browser.
+ * expo-secure-store v14+ uses:
+ *   setItemAsync(key, value)
+ *   getItemAsync(key)
+ *   deleteItemAsync(key)
+ *
+ * @better-auth/expo internally calls the old names:
+ *   setValueWithKeyAsync(value, key)   ← note: value first, key second
+ *   getValueWithKeyAsync(key)
+ *   removeValueWithKeyAsync(key)
+ *
+ * We export a plain object (not a frozen module namespace) so the methods
+ * can be assigned and called without hitting the "not a function" error that
+ * occurs when trying to mutate a sealed ES module namespace object.
+ *
+ * On web, expo-secure-store is a no-op stub, so we fall back to localStorage.
  */
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-const ss = SecureStore as any;
+const isWeb = Platform.OS === 'web';
 
-// Web fallback using localStorage (SecureStore is a no-op on web)
+// ---------------------------------------------------------------------------
+// Web fallback — localStorage-backed storage for browser preview
+// ---------------------------------------------------------------------------
 const webSetItem = (key: string, value: string): Promise<void> => {
   try {
     localStorage.setItem(key, value);
@@ -40,21 +52,37 @@ const webDeleteItem = (key: string): Promise<void> => {
   return Promise.resolve();
 };
 
-const isWeb = Platform.OS === 'web';
-
-// Patch setItemAsync / getItemAsync / deleteItemAsync for web
-if (isWeb) {
-  ss.setItemAsync = webSetItem;
-  ss.getItemAsync = webGetItem;
-  ss.deleteItemAsync = webDeleteItem;
-}
-
-// Always patch the old API names unconditionally so @better-auth/expo internals work
-ss.setValueWithKeyAsync = (value: string, key: string) =>
+// ---------------------------------------------------------------------------
+// Unified helpers that work on both native and web
+// ---------------------------------------------------------------------------
+const setItem = (key: string, value: string): Promise<void> =>
   isWeb ? webSetItem(key, value) : SecureStore.setItemAsync(key, value);
 
-ss.getValueWithKeyAsync = (key: string) =>
+const getItem = (key: string): Promise<string | null> =>
   isWeb ? webGetItem(key) : SecureStore.getItemAsync(key);
 
-ss.removeValueWithKeyAsync = (key: string) =>
+const deleteItem = (key: string): Promise<void> =>
   isWeb ? webDeleteItem(key) : SecureStore.deleteItemAsync(key);
+
+// ---------------------------------------------------------------------------
+// Exported storage adapter
+// Provides BOTH the current API names and the old @better-auth/expo names.
+// Use this object wherever a storage adapter is needed.
+// ---------------------------------------------------------------------------
+export const secureStorage = {
+  // Current expo-secure-store v14 API
+  setItemAsync: setItem,
+  getItemAsync: getItem,
+  deleteItemAsync: deleteItem,
+
+  // Old API names used internally by @better-auth/expo
+  // NOTE: old API has (value, key) argument order — not (key, value)
+  setValueWithKeyAsync: (value: string, key: string): Promise<void> =>
+    setItem(key, value),
+  getValueWithKeyAsync: (key: string): Promise<string | null> =>
+    getItem(key),
+  removeValueWithKeyAsync: (key: string): Promise<void> =>
+    deleteItem(key),
+};
+
+console.log('[SecureStore] Storage adapter initialised, platform:', Platform.OS);
