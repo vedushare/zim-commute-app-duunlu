@@ -130,6 +130,8 @@ function RootLayoutNav() {
         <Stack.Screen name="auth/verify-otp" options={{ headerShown: false }} />
         <Stack.Screen name="auth/profile-setup" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[roomId]" options={{ headerShown: false }} />
+        <Stack.Screen name="rides/tracking" options={{ title: 'Live Tracking', headerShown: true }} />
+        <Stack.Screen name="rides/broadcast" options={{ title: 'Broadcast Location', headerShown: true }} />
         <Stack.Screen name="offline/pending-operations" options={{ headerShown: true, title: 'Pending Operations' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
