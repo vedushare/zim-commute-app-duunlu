@@ -40,6 +40,12 @@ export default function TabLayout() {
       androidIconName: 'home' as const,
     },
     {
+      name: 'chats',
+      title: 'Chats',
+      iosIconName: 'message.fill',
+      androidIconName: 'chat' as const,
+    },
+    {
       name: 'profile',
       title: 'Profile',
       iosIconName: 'person.fill',
@@ -49,7 +55,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} tabs={tabs} />}
+      tabBar={(props) => <FloatingTabBar {...props} tabs={tabs} containerWidth={undefined} />}
       screenOptions={{
         headerShown: false,
       }}
@@ -58,6 +64,12 @@ export default function TabLayout() {
         name="(home)"
         options={{
           title: 'Home',
+        }}
+      />
+      <Tabs.Screen
+        name="chats"
+        options={{
+          title: 'Chats',
         }}
       />
       <Tabs.Screen
