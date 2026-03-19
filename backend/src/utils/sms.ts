@@ -38,15 +38,15 @@ export function validateSMSEnv(): void {
  *   SMS_ENABLED     - set to "false" to disable SMS sending entirely
  *   SMS_TEST_MODE   - set to "true" to log OTPs instead of sending
  */
-export async function sendOTPSMS(otp: string, phoneNumber: string): Promise<void> {
+export async function sendOTPSMS(otp: string, phoneNumber: string): Promise<'sent' | 'disabled' | 'test_mode'> {
   if (process.env.SMS_ENABLED === 'false') {
     console.warn('[SMS] SMS sending is disabled (SMS_ENABLED=false)');
-    return;
+    return 'disabled';
   }
 
   if (process.env.SMS_TEST_MODE === 'true') {
     console.log(`[SMS TEST MODE] OTP for ${phoneNumber}: ${otp}`);
-    return;
+    return 'test_mode';
   }
 
   const apiKey = process.env.SMS_API_KEY;
@@ -78,4 +78,6 @@ export async function sendOTPSMS(otp: string, phoneNumber: string): Promise<void
     console.error(`[SMS] Provider error: HTTP ${response.status} - ${body}`);
     throw new Error(`SMS provider returned HTTP ${response.status}`);
   }
+
+  return 'sent';
 }
