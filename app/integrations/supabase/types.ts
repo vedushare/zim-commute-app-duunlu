@@ -10,7 +10,96 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          id: string
+          ride_id: string
+          sender_id: string
+          content: string
+          message_type: 'text' | 'location'
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ride_id: string
+          sender_id: string
+          content: string
+          message_type?: 'text' | 'location'
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ride_id?: string
+          sender_id?: string
+          content?: string
+          message_type?: 'text' | 'location'
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      ride_locations: {
+        Row: {
+          id: string
+          ride_id: string
+          driver_id: string
+          latitude: number
+          longitude: number
+          heading: number | null
+          speed: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ride_id: string
+          driver_id: string
+          latitude: number
+          longitude: number
+          heading?: number | null
+          speed?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ride_id?: string
+          driver_id?: string
+          latitude?: number
+          longitude?: number
+          heading?: number | null
+          speed?: number | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      ride_share_links: {
+        Row: {
+          id: string
+          ride_id: string
+          token: string
+          created_by: string
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ride_id: string
+          token?: string
+          created_by: string
+          expires_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ride_id?: string
+          token?: string
+          created_by?: string
+          expires_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

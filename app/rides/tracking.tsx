@@ -12,13 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Map } from '@/components/Map';
 import { colors } from '@/styles/commonStyles';
 import { useDarkMode } from '@/hooks/useDarkMode';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  getLatestLocation,
-  getLocationHistory,
-  openLocationWebSocket,
-  LocationUpdate,
-} from '@/utils/locationApi';
+import { supabase } from '@/app/integrations/supabase/client';
+import type { LocationUpdate } from '@/utils/locationApi';
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
@@ -128,7 +123,6 @@ export default function TrackingScreen() {
     roomId: string;
     status?: string;
   }>();
-  const { token } = useAuth();
   const { isDarkMode } = useDarkMode();
 
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -138,8 +132,7 @@ export default function TrackingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -152,28 +145,6 @@ export default function TrackingScreen() {
       if (last && last.latitude === loc.latitude && last.longitude === loc.longitude) return prev;
       return [...prev, point];
     });
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (!rideId) return;
-    console.log('[Tracking] Starting fallback polling every 5s');
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        console.log('[Tracking] Polling GET /api/locations/' + rideId);
-        const loc = await getLatestLocation(rideId);
-        applyLocationUpdate(loc);
-      } catch (err: any) {
-        console.warn('[Tracking] Poll error:', err.message);
-      }
-    }, 5000);
-  }, [rideId, applyLocationUpdate]);
-
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-      console.log('[Tracking] Polling stopped');
-    }
   }, []);
 
   // ── Mount / unmount ───────────────────────────────────────────────────────
@@ -189,22 +160,24 @@ export default function TrackingScreen() {
 
     const init = async () => {
       try {
-        // Load history + latest in parallel
-        const [history, latest] = await Promise.all([
-          getLocationHistory(rideId).catch(() => [] as LocationUpdate[]),
-          getLatestLocation(rideId).catch(() => null),
-        ]);
+        // Load breadcrumb history from Supabase
+        const { data: historyData, error: histErr } = await supabase
+          .from('ride_locations')
+          .select('*')
+          .eq('ride_id', rideId)
+          .order('created_at', { ascending: true })
+          .limit(100);
 
-        if (history.length > 0) {
-          const trail = history.map((l) => ({ latitude: l.latitude, longitude: l.longitude }));
+        if (histErr) {
+          console.warn('[Tracking] History load error:', histErr.message);
+        } else if (historyData && historyData.length > 0) {
+          const trail = historyData.map((l: LocationUpdate) => ({
+            latitude: l.latitude,
+            longitude: l.longitude,
+          }));
           setBreadcrumbs(trail);
-          const last = trail[trail.length - 1];
-          setDriverLocation(last);
+          setDriverLocation(trail[trail.length - 1]);
           console.log('[Tracking] Loaded', trail.length, 'history points');
-        }
-
-        if (latest) {
-          applyLocationUpdate(latest);
         }
       } catch (err: any) {
         console.warn('[Tracking] Init data error:', err.message);
@@ -216,53 +189,37 @@ export default function TrackingScreen() {
 
     init();
 
-    // Try WebSocket
-    if (token) {
-      try {
-        const ws = openLocationWebSocket(rideId, token, (loc) => {
+    // Subscribe to live location updates via Supabase Realtime
+    console.log('[Tracking] Setting up Supabase Realtime for ride_locations:', rideId);
+    channelRef.current = supabase
+      .channel(`ride-location-${rideId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ride_locations',
+          filter: `ride_id=eq.${rideId}`,
+        },
+        (payload) => {
+          const loc = payload.new as LocationUpdate;
+          console.log('[Tracking] Realtime location update:', loc.latitude, loc.longitude);
           applyLocationUpdate(loc);
-        });
-
-        ws.onopen = () => {
-          console.log('[Tracking] WebSocket connected');
-          setWsConnected(true);
-          stopPolling();
-        };
-
-        ws.onerror = () => {
-          console.warn('[Tracking] WebSocket error — falling back to polling');
-          setWsConnected(false);
-          startPolling();
-        };
-
-        ws.onclose = (e) => {
-          console.log('[Tracking] WebSocket closed:', e.code);
-          setWsConnected(false);
-          startPolling();
-        };
-
-        wsRef.current = ws;
-      } catch {
-        console.warn('[Tracking] Could not open WebSocket, using polling');
-        startPolling();
-      }
-    } else {
-      startPolling();
-    }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Tracking] Channel status:', status);
+        setWsConnected(status === 'SUBSCRIBED');
+      });
 
     return () => {
       console.log('[Tracking] Unmounting — cleaning up');
-      if (wsRef.current) {
-        wsRef.current.onopen = null;
-        wsRef.current.onerror = null;
-        wsRef.current.onclose = null;
-        wsRef.current.onmessage = null;
-        wsRef.current.close();
-        wsRef.current = null;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
-      stopPolling();
     };
-  }, [rideId, token]);
+  }, [rideId]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
