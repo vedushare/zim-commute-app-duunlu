@@ -25,6 +25,17 @@ yarn-error.*
 
 .env*.local
 
+# Environment files - never commit real secrets
+# Use .env.example as a template; set real values in your hosting provider (e.g. Vercel)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+backend/.env
+backend/.env.*
+!backend/.env.example
+
 *.tsbuildinfo
 
 .natively/
