@@ -11,13 +11,13 @@
 import Constants from 'expo-constants';
 import { secureStorage } from '@/utils/secureStorePolyfill';
 import { Platform } from 'react-native';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/utils/supabase';
 
 // Get backend URL from app.json configuration
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
 
-// Supabase Edge Function URL for OTP
-const SUPABASE_OTP_URL = 'https://sbayoiscitldgmfwueld.supabase.co/functions/v1/otp';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNiYXlvaXNjaXRsZGdtZnd1ZWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Mzc2MjksImV4cCI6MjA4NjExMzYyOX0.RspgJLYEbUzaRLh65Kqynbjmfsz-Po-sbLbFt6jf6IM';
+// Supabase Edge Function URL for OTP — credentials sourced from centralized client
+const SUPABASE_OTP_URL = `${SUPABASE_URL}/functions/v1/otp`;
 
 console.log('[API] Backend URL configured:', BACKEND_URL);
 
