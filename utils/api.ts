@@ -15,9 +15,12 @@ import { Platform } from 'react-native';
 // Get backend URL from app.json configuration
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
 
+// Supabase configuration from app.json extra section (never hardcode keys in source)
+const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl || '';
+const SUPABASE_ANON_KEY = Constants.expoConfig?.extra?.supabaseAnonKey || '';
+
 // Supabase Edge Function URL for OTP
-const SUPABASE_OTP_URL = 'https://sbayoiscitldgmfwueld.supabase.co/functions/v1/otp';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNiYXlvaXNjaXRsZGdtZnd1ZWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Mzc2MjksImV4cCI6MjA4NjExMzYyOX0.RspgJLYEbUzaRLh65Kqynbjmfsz-Po-sbLbFt6jf6IM';
+const SUPABASE_OTP_URL = `${SUPABASE_URL}/functions/v1/otp`;
 
 console.log('[API] Backend URL configured:', BACKEND_URL);
 
