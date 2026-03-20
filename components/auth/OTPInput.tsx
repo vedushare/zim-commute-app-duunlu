@@ -85,10 +85,13 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
           // to trigger the system OTP suggestion without crashing on Android
           const isFirstInput = index === 0;
 
-          // On Android, 'one-time-code' / 'sms-otp' triggers an internal React
-          // Navigation route lookup that crashes with "Cannot read property 'route'
-          // of undefined". Use it only on iOS; fall back to 'off' on Android.
+          // On Android, any OTP-related autoComplete value ('one-time-code', 'sms-otp')
+          // triggers an internal React Navigation route lookup that crashes with
+          // "Cannot read property 'route' of undefined". Use 'oneTimeCode' only on
+          // iOS; disable autofill entirely on Android via autoComplete='off' and
+          // importantForAutofill='no' to prevent the crash.
           const autoCompleteValue = Platform.OS === 'ios' && isFirstInput ? 'one-time-code' : 'off';
+          const isAndroid = Platform.OS === 'android';
 
           return (
             <TextInput
@@ -108,6 +111,7 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
               keyboardType="number-pad"
               maxLength={1}
               autoComplete={autoCompleteValue}
+              importantForAutofill={isAndroid ? 'no' : 'auto'}
               {...(Platform.OS === 'ios' && isFirstInput ? { textContentType: 'oneTimeCode' } : {})}
             />
           );
