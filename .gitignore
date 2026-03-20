@@ -46,8 +46,4 @@ ios/
 pnpm-lock.yaml
 package-lock.json
 
-# SQLite databases
-*.sqlite
-*.sqlite3
-agent_chat_context.sqlite
 
