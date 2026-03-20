@@ -77,6 +77,8 @@ export interface SOSAlert {
 export interface ShareRideLink {
   shareLink: string;
   whatsappMessage: string;
+  /** ISO timestamp when the share link expires (server-enforced, 24 h by default). */
+  expiresAt?: string;
 }
 
 export interface SharedRideDetails {

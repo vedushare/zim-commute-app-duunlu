@@ -14,7 +14,19 @@ import * as Location from 'expo-location';
 import { Map } from '@/components/Map';
 import { colors } from '@/styles/commonStyles';
 import { useDarkMode } from '@/hooks/useDarkMode';
-import { postLocation } from '@/utils/locationApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/app/integrations/supabase/client';
+
+// Minimum distance (metres) between broadcasts to reduce battery usage.
+const MIN_DISTANCE_METRES = 10;
+// Maximum time (ms) between forced updates even if we haven't moved.
+const MAX_UPDATE_INTERVAL_MS = 15_000;
+
+// TODO: For true background location broadcasting while the driver's screen is off,
+// integrate expo-task-manager + Location.startLocationUpdatesAsync with a background
+// task. This screen currently only broadcasts while the app is in the foreground.
+// Safe fallback: the passenger's tracking screen will show the last known position
+// when no new updates are received.
 
 // ─── AnimatedPressable ────────────────────────────────────────────────────────
 
@@ -100,6 +112,7 @@ export default function BroadcastScreen() {
   const router = useRouter();
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
   const { isDarkMode } = useDarkMode();
+  const { user } = useAuth();
 
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -109,8 +122,7 @@ export default function BroadcastScreen() {
   const [loading, setLoading] = useState(true);
 
   const watchRef = useRef<Location.LocationSubscription | null>(null);
-  const broadcastTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const latestLocationRef = useRef<Location.LocationObject | null>(null);
+  const lastBroadcastRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const statusScale = useRef(new Animated.Value(1)).current;
 
@@ -139,7 +151,6 @@ export default function BroadcastScreen() {
         try {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
           setCurrentLocation(pos);
-          latestLocationRef.current = pos;
           console.log('[Broadcast] Initial position:', pos.coords.latitude, pos.coords.longitude);
         } catch (err: any) {
           console.warn('[Broadcast] Could not get initial position:', err.message);
@@ -156,9 +167,41 @@ export default function BroadcastScreen() {
 
   // ── Broadcast logic ───────────────────────────────────────────────────────
 
+  /**
+   * Returns true if the new position is far enough from the last broadcast
+   * OR enough time has passed since the last broadcast.
+   */
+  const shouldBroadcast = useCallback(
+    (lat: number, lng: number): boolean => {
+      const last = lastBroadcastRef.current;
+      if (!last) return true;
+
+      const elapsed = Date.now() - last.time;
+      if (elapsed >= MAX_UPDATE_INTERVAL_MS) return true;
+
+      // Rough distance in metres using Haversine approximation
+      const R = 6_371_000;
+      const dLat = ((lat - last.lat) * Math.PI) / 180;
+      const dLng = ((lng - last.lng) * Math.PI) / 180;
+      const cosLastLat = Math.cos((last.lat * Math.PI) / 180);
+      const cosLat = Math.cos((lat * Math.PI) / 180);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        cosLastLat * cosLat * Math.sin(dLng / 2) ** 2;
+      const distMetres = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      return distMetres >= MIN_DISTANCE_METRES;
+    },
+    []
+  );
+
   const startBroadcasting = useCallback(async () => {
     if (!rideId) {
       setLastError('No ride ID — cannot broadcast');
+      return;
+    }
+    if (!user?.id) {
+      setLastError('Not authenticated — cannot broadcast');
       return;
     }
     console.log('[Broadcast] Starting location broadcast for ride:', rideId);
@@ -171,51 +214,48 @@ export default function BroadcastScreen() {
       Animated.timing(statusScale, { toValue: 1, duration: 150, useNativeDriver: true }),
     ]).start();
 
-    // Watch GPS position
+    // Watch GPS position and broadcast on significant movement or time elapsed
     try {
       watchRef.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 3000,
-          distanceInterval: 0,
+          timeInterval: 5000,       // poll GPS every 5 s
+          distanceInterval: 0,      // let shouldBroadcast() decide threshold
         },
-        (loc) => {
+        async (loc) => {
           setCurrentLocation(loc);
-          latestLocationRef.current = loc;
-          console.log('[Broadcast] GPS update:', loc.coords.latitude, loc.coords.longitude);
+          const { latitude: lat, longitude: lng } = loc.coords;
+          console.log('[Broadcast] GPS update:', lat, lng);
+
+          if (!shouldBroadcast(lat, lng)) return;
+
+          lastBroadcastRef.current = { lat, lng, time: Date.now() };
+
+          try {
+            const { error } = await supabase.from('ride_locations').insert({
+              ride_id: rideId,
+              driver_id: user.id,
+              latitude: lat,
+              longitude: lng,
+              heading: loc.coords.heading ?? null,
+              speed: loc.coords.speed ?? null,
+            });
+            if (error) throw error;
+            setUpdateCount((c) => c + 1);
+            setLastError(null);
+            console.log('[Broadcast] Location inserted into ride_locations');
+          } catch (err: any) {
+            console.error('[Broadcast] Failed to insert location:', err.message);
+            setLastError('Upload failed: ' + err.message);
+          }
         }
       );
     } catch (err: any) {
       console.error('[Broadcast] watchPositionAsync error:', err.message);
       setLastError('Failed to start GPS watch: ' + err.message);
       setIsBroadcasting(false);
-      return;
     }
-
-    // Send to backend every 3 seconds
-    broadcastTimerRef.current = setInterval(async () => {
-      const loc = latestLocationRef.current;
-      if (!loc) return;
-      try {
-        console.log('[Broadcast] POST /api/locations/' + rideId, {
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-        });
-        await postLocation(
-          rideId,
-          loc.coords.latitude,
-          loc.coords.longitude,
-          loc.coords.heading ?? undefined,
-          loc.coords.speed ?? undefined
-        );
-        setUpdateCount((c) => c + 1);
-        setLastError(null);
-      } catch (err: any) {
-        console.error('[Broadcast] Failed to post location:', err.message);
-        setLastError('Upload failed: ' + err.message);
-      }
-    }, 3000);
-  }, [rideId, statusScale]);
+  }, [rideId, user?.id, statusScale, shouldBroadcast]);
 
   const stopBroadcasting = useCallback(() => {
     console.log('[Broadcast] Stopping broadcast');
@@ -224,10 +264,6 @@ export default function BroadcastScreen() {
     if (watchRef.current) {
       watchRef.current.remove();
       watchRef.current = null;
-    }
-    if (broadcastTimerRef.current) {
-      clearInterval(broadcastTimerRef.current);
-      broadcastTimerRef.current = null;
     }
   }, []);
 

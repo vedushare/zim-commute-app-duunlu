@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
 import { IconSymbol } from '@/components/IconSymbol';
 import Button from '@/components/button';
 import { CustomModal } from '@/components/ui/CustomModal';
@@ -92,10 +93,15 @@ export default function ShareRideScreen() {
 
   const handleCopyLink = async () => {
     if (!shareData) return;
-    
+
     console.log('[ShareRide] User tapped Copy Link');
-    // Note: Clipboard API would be used here in production
-    showModal('Link Copied', 'Share link copied to clipboard');
+    try {
+      await Clipboard.setStringAsync(shareData.shareLink);
+      showModal('Link Copied', 'Share link has been copied to your clipboard.');
+    } catch (err) {
+      console.error('[ShareRide] Failed to copy to clipboard:', err);
+      showModal('Error', 'Could not copy link. Please copy it manually.');
+    }
   };
 
   return (
@@ -221,7 +227,10 @@ export default function ShareRideScreen() {
                 color={colors.primary}
               />
               <Text style={styles.privacyText}>
-                Your location is only shared with people who have this link. The link expires when your ride is completed.
+                Your location is only shared with people who have this link. The link expires 24 hours after creation or when your ride is completed, whichever comes first.
+                {shareData.expiresAt
+                  ? ` This link expires at ${new Date(shareData.expiresAt).toLocaleString()}.`
+                  : ''}
               </Text>
             </View>
           </>

@@ -22,13 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDarkMode } from '@/hooks/useDarkMode';
-import {
-  getChatMessages,
-  sendChatMessage,
-  markMessagesRead,
-  openChatWebSocket,
-  ChatMessage,
-} from '@/utils/chatApi';
+import { supabase } from '@/app/integrations/supabase/client';
+import type { ChatMessage } from '@/utils/chatApi';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
@@ -185,7 +180,7 @@ export default function ChatRoomScreen() {
   const [wsConnected, setWsConnected] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const inputRef = useRef<TextInput>(null);
   const sendButtonScale = useRef(new Animated.Value(1)).current;
 
@@ -196,18 +191,34 @@ export default function ChatRoomScreen() {
     setLoading(true);
     setError(null);
     try {
-      const msgs = await getChatMessages(roomId, { limit: 50 });
+      const { data, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('ride_id', roomId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (fetchError) throw fetchError;
+      const msgs = (data ?? []) as ChatMessage[];
       setMessages(msgs);
       setHasMore(msgs.length === 50);
-      // Mark as read
-      markMessagesRead(roomId).catch(() => {});
+
+      // Mark received messages as read
+      if (user?.id) {
+        await supabase
+          .from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .eq('ride_id', roomId)
+          .neq('sender_id', user.id)
+          .is('read_at', null);
+      }
     } catch (err: any) {
       console.error('[ChatRoom] Failed to load messages:', err.message);
       setError(err.message ?? 'Failed to load messages');
     } finally {
       setLoading(false);
     }
-  }, [roomId]);
+  }, [roomId, user?.id]);
 
   // ── Load older messages ──
   const loadMore = useCallback(async () => {
@@ -216,7 +227,16 @@ export default function ChatRoomScreen() {
     console.log('[ChatRoom] Loading more messages before:', oldest.id);
     setLoadingMore(true);
     try {
-      const older = await getChatMessages(roomId, { before: oldest.id, limit: 50 });
+      const { data, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('ride_id', roomId)
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (fetchError) throw fetchError;
+      const older = (data ?? []) as ChatMessage[];
       if (older.length === 0) {
         setHasMore(false);
       } else {
@@ -230,46 +250,71 @@ export default function ChatRoomScreen() {
     }
   }, [roomId, loadingMore, hasMore, messages]);
 
-  // ── WebSocket ──
-  const connectWs = useCallback(async () => {
+  // ── Supabase Realtime subscription ──
+  const setupSubscription = useCallback(() => {
     if (!roomId) return;
-    try {
-      const ws = await openChatWebSocket(
-        roomId,
-        (msg) => {
-          console.log('[ChatRoom] WS message received:', msg.id);
+    console.log('[ChatRoom] Setting up Supabase Realtime for room:', roomId);
+    channelRef.current = supabase
+      .channel(`messages-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `ride_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const msg = payload.new as ChatMessage;
+          console.log('[ChatRoom] Realtime message received:', msg.id);
           setMessages((prev) => {
-            // Avoid duplicates
             if (prev.some((m) => m.id === msg.id)) return prev;
             return [...prev, msg];
           });
-          // Mark read if not mine
+          // Mark incoming messages from others as read
           if (msg.sender_id !== user?.id) {
-            markMessagesRead(roomId).catch(() => {});
+            void supabase
+              .from('messages')
+              .update({ read_at: new Date().toISOString() })
+              .eq('id', msg.id)
+              .then(({ error }) => {
+                if (error) console.warn('[ChatRoom] Failed to mark message read:', error.message);
+              });
           }
-          // Scroll to bottom
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }, 80);
-        },
-        () => {
-          setWsConnected(false);
         }
-      );
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => setWsConnected(false);
-      wsRef.current = ws;
-    } catch (err: any) {
-      console.error('[ChatRoom] WS connect failed:', err.message);
-    }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `ride_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const updated = payload.new as ChatMessage;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, read_at: updated.read_at } : m))
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log('[ChatRoom] Channel status:', status);
+        setWsConnected(status === 'SUBSCRIBED');
+      });
   }, [roomId, user?.id]);
 
   useEffect(() => {
     loadMessages();
-    connectWs();
+    setupSubscription();
     return () => {
-      wsRef.current?.close();
-      wsRef.current = null;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 
@@ -285,7 +330,7 @@ export default function ChatRoomScreen() {
   // ── Send message ──
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
-    if (!text || sending || !roomId) return;
+    if (!text || sending || !roomId || !user?.id) return;
 
     console.log('[ChatRoom] Sending message');
     setSending(true);
@@ -298,22 +343,36 @@ export default function ChatRoomScreen() {
     ]).start();
 
     try {
-      const msg = await sendChatMessage(roomId, text);
-      // If WS is not connected, add optimistically
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 80);
+      const { data, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          ride_id: roomId,
+          sender_id: user.id,
+          content: text,
+          message_type: 'text',
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Realtime will deliver the message, but add optimistically in case of lag
+      if (data) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev;
+          return [...prev, data as ChatMessage];
+        });
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 80);
+      }
     } catch (err: any) {
       console.error('[ChatRoom] Send failed:', err.message);
       setInputText(text); // restore
     } finally {
       setSending(false);
     }
-  }, [inputText, sending, roomId]);
+  }, [inputText, sending, roomId, user?.id]);
 
   // ── Render item ──
   const renderItem = useCallback(

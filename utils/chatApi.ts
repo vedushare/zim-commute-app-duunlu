@@ -1,11 +1,14 @@
 /**
- * Chat API utilities for ZimCommute
- * Connects to the Supabase Edge Function at /functions/v1/chat
+ * Chat type definitions for ZimCommute.
+ *
+ * The chat architecture is now fully Supabase-owned:
+ *   - Messages are stored in public.messages (ride_id == roomId).
+ *   - Real-time updates are delivered via Supabase Realtime postgres_changes.
+ *   - Use the supabase client from @/app/integrations/supabase/client directly
+ *     in screens; this file exports shared types and Supabase-backed helpers.
  */
 
-import { getAuthToken } from './api';
-
-const CHAT_BASE_URL = 'https://sbayoiscitldgmfwueld.supabase.co/functions/v1/chat';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export interface ChatRoom {
   id: string;
@@ -22,131 +25,74 @@ export interface ChatRoom {
   unread_count: number;
 }
 
+/**
+ * A single chat message stored in public.messages.
+ * ride_id is the canonical room identifier (roomId === rideId).
+ * read_at (nullable timestamp) replaces the legacy boolean `read` field.
+ */
 export interface ChatMessage {
   id: string;
-  room_id: string;
+  /** ride_id doubles as the chat room id — roomId === rideId */
+  ride_id: string;
   sender_id: string;
   content: string;
   message_type: 'text' | 'location';
+  /** null = unread; ISO timestamp = when the recipient read it */
   read_at: string | null;
   created_at: string;
 }
 
-async function chatFetch<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = await getAuthToken();
-  if (!token) throw new Error('Authentication required');
+/**
+ * Fetch the list of chat rooms (rides with messages) for the current user.
+ * Uses Supabase directly; RLS ensures only the user's rides are returned.
+ */
+export async function getChatRooms(): Promise<ChatRoom[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('ride_id, created_at, content, sender_id, read_at')
+    .order('created_at', { ascending: false });
 
-  const url = `${CHAT_BASE_URL}${path}`;
-  console.log(`[ChatAPI] ${options.method ?? 'GET'} ${path}`);
+  if (error) throw error;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData?.session?.user?.id ?? '';
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.error('[ChatAPI] Error:', data);
-    throw new Error(data.error ?? `Request failed with status ${response.status}`);
+  // Group messages by ride_id to build a room list
+  const roomMap = new Map<string, ChatRoom>();
+  for (const msg of (data ?? []) as Array<{
+    ride_id: string;
+    created_at: string;
+    content: string;
+    sender_id: string;
+    read_at: string | null;
+  }>) {
+    if (!roomMap.has(msg.ride_id)) {
+      roomMap.set(msg.ride_id, {
+        id: msg.ride_id,
+        ride_id: msg.ride_id,
+        driver_id: '',
+        passenger_id: '',
+        status: 'active',
+        created_at: msg.created_at,
+        last_message: {
+          content: msg.content,
+          created_at: msg.created_at,
+          sender_id: msg.sender_id,
+        },
+        unread_count: 0,
+      });
+    }
+    // Count messages from others that haven't been read yet
+    if (userId && msg.sender_id !== userId && msg.read_at === null) {
+      const room = roomMap.get(msg.ride_id);
+      if (room) room.unread_count += 1;
+    }
   }
 
-  return data as T;
-}
-
-export async function createOrGetChatRoom(params: {
-  ride_id: string;
-  driver_id: string;
-  passenger_id: string;
-}): Promise<ChatRoom> {
-  return chatFetch<ChatRoom>('/api/chat/rooms', {
-    method: 'POST',
-    body: JSON.stringify(params),
+  return Array.from(roomMap.values()).sort((a, b) => {
+    const aTime = a.last_message?.created_at ?? a.created_at;
+    const bTime = b.last_message?.created_at ?? b.created_at;
+    return new Date(bTime).getTime() - new Date(aTime).getTime();
   });
 }
 
-export async function getChatRooms(): Promise<ChatRoom[]> {
-  const data = await chatFetch<{ rooms: ChatRoom[] }>('/api/chat/rooms');
-  return data.rooms;
-}
-
-export async function getChatMessages(
-  roomId: string,
-  options?: { before?: string; limit?: number }
-): Promise<ChatMessage[]> {
-  const params = new URLSearchParams();
-  if (options?.before) params.set('before', options.before);
-  if (options?.limit) params.set('limit', String(options.limit));
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  const data = await chatFetch<{ messages: ChatMessage[] }>(
-    `/api/chat/rooms/${roomId}/messages${qs}`
-  );
-  return data.messages;
-}
-
-export async function sendChatMessage(
-  roomId: string,
-  content: string,
-  message_type: 'text' | 'location' = 'text'
-): Promise<ChatMessage> {
-  return chatFetch<ChatMessage>(`/api/chat/rooms/${roomId}/messages`, {
-    method: 'POST',
-    body: JSON.stringify({ content, message_type }),
-  });
-}
-
-export async function markMessagesRead(roomId: string): Promise<void> {
-  await chatFetch<{ success: boolean }>(`/api/chat/rooms/${roomId}/read`, {
-    method: 'POST',
-  });
-}
-
-/**
- * Open a WebSocket connection to the chat room.
- * Returns the WebSocket instance — caller is responsible for closing it.
- */
-export async function openChatWebSocket(
-  roomId: string,
-  onMessage: (msg: ChatMessage) => void,
-  onError?: (e: Event) => void
-): Promise<WebSocket> {
-  const token = await getAuthToken();
-  if (!token) throw new Error('Authentication required');
-
-  const wsUrl = `wss://sbayoiscitldgmfwueld.supabase.co/functions/v1/chat/api/chat/ws/${roomId}?token=${encodeURIComponent(token)}`;
-  console.log('[ChatWS] Connecting to room:', roomId);
-
-  const ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    console.log('[ChatWS] Connected to room:', roomId);
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data) as ChatMessage;
-      console.log('[ChatWS] Received message:', msg.id);
-      onMessage(msg);
-    } catch (err) {
-      console.error('[ChatWS] Failed to parse message:', err);
-    }
-  };
-
-  ws.onerror = (e) => {
-    console.error('[ChatWS] Error:', e);
-    onError?.(e);
-  };
-
-  ws.onclose = () => {
-    console.log('[ChatWS] Disconnected from room:', roomId);
-  };
-
-  return ws;
-}
