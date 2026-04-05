@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ZIMBABWE_CITIES } from '@/constants/zimbabwe';
 import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { CustomModal } from '@/components/ui/CustomModal';
 import { VerificationBadge } from '@/components/auth/VerificationBadge';
 import { colors } from '@/styles/commonStyles';
@@ -171,6 +171,9 @@ export default function ProfileSetupScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [compressionSavings, setCompressionSavings] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
 
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -231,12 +234,9 @@ export default function ProfileSetupScreen() {
       router.replace('/(tabs)/(home)');
     } catch (error: any) {
       console.error('[ProfileSetup] Error completing setup:', error);
-      CustomModal.show({
-        visible: true,
-        title: 'Setup Failed',
-        message: error.message || 'Failed to complete profile setup. Please try again.',
-        buttons: [{ text: 'OK', onPress: () => {} }],
-      });
+      setModalTitle('Setup Failed');
+      setModalMessage(error.message || 'Failed to complete profile setup. Please try again.');
+      setModalVisible(true);
     } finally {
       setLoading(false);
       endTracking();
@@ -279,12 +279,9 @@ export default function ProfileSetupScreen() {
       }
     } catch (error) {
       console.error('[ProfileSetup] Error picking image:', error);
-      CustomModal.show({
-        visible: true,
-        title: 'Error',
-        message: 'Failed to pick image. Please try again.',
-        buttons: [{ text: 'OK', onPress: () => {} }],
-      });
+      setModalTitle('Error');
+      setModalMessage('Failed to pick image. Please try again.');
+      setModalVisible(true);
     } finally {
       endTracking();
     }
@@ -325,12 +322,9 @@ export default function ProfileSetupScreen() {
       }
     } catch (error) {
       console.error('[ProfileSetup] Error taking photo:', error);
-      CustomModal.show({
-        visible: true,
-        title: 'Error',
-        message: 'Failed to take photo. Please try again.',
-        buttons: [{ text: 'OK', onPress: () => {} }],
-      });
+      setModalTitle('Error');
+      setModalMessage('Failed to take photo. Please try again.');
+      setModalVisible(true);
     } finally {
       endTracking();
     }
@@ -534,6 +528,15 @@ export default function ProfileSetupScreen() {
           </Button>
         )}
       </View>
+
+      <CustomModal
+        visible={modalVisible}
+        title={modalTitle}
+        message={modalMessage}
+        type="error"
+        onClose={() => setModalVisible(false)}
+        buttons={[{ text: 'OK', onPress: () => setModalVisible(false) }]}
+      />
     </SafeAreaView>
   );
 }
