@@ -85,14 +85,14 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
           // to trigger the system OTP suggestion without crashing on Android
           const isFirstInput = index === 0;
 
-          // On Android and web, any OTP-related autoComplete value ('one-time-code', 'sms-otp')
-          // triggers an internal React Navigation route lookup that crashes with
-          // "Cannot read property 'route' of undefined". Use 'one-time-code' only on
-          // iOS; disable autofill on Android/web via autoComplete='off' and
-          // importantForAutofill='no' to prevent the crash.
+          // On iOS only, set textContentType='oneTimeCode' on the first box to
+          // trigger the system OTP suggestion banner.
+          // On Android/web, use autoComplete='off' to prevent autofill crashes —
+          // 'one-time-code' / 'sms-otp' can trigger internal RN route lookups on
+          // some Android versions. importantForAutofill is NOT a valid RN TextInput
+          // prop and must not be used (causes Hermes render crash on Android).
           const isIOS = Platform.OS === 'ios';
           const autoCompleteValue = isIOS && isFirstInput ? 'one-time-code' : 'off';
-          const isAndroid = Platform.OS === 'android';
 
           return (
             <TextInput
@@ -112,8 +112,7 @@ export function OTPInput({ length = 6, value, onChangeText, error }: OTPInputPro
               keyboardType="number-pad"
               maxLength={1}
               autoComplete={autoCompleteValue}
-              importantForAutofill={isAndroid ? 'no' : 'auto'}
-              {...(Platform.OS === 'ios' && isFirstInput ? { textContentType: 'oneTimeCode' } : {})}
+              {...(isIOS && isFirstInput ? { textContentType: 'oneTimeCode' } : {})}
             />
           );
         })}
